@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.67.3] - 2026-06-02
+
+- Added CLI option `--detailed-exitcode`. It changes returned exitcode to 2 when any changes were suggested or executed.
+- Enforced parameters `ENABLE_QUERY_ACCELERATION` and `QUERY_ACCELERATION_MAX_SCALE_FACTOR` to be always present when creating a `WAREHOUSE`. Lack of these parameters becomes a problem since Snowflake decided to silently enable query acceleration for new Gen2 warehouses.
+
 ## [0.67.2] - 2026-05-30
 
 - Prevented SnowDDL from dropping automatically created Snowflake Streaming pipes managed by Snowflake (thanks to @zaza).

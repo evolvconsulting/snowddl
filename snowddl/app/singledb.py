@@ -245,6 +245,14 @@ class SingleDbApp(BaseApp):
             help="Clone from another environment with different env_prefix",
         )
 
+        # Detailed exitcode
+        parser.add_argument(
+            "--detailed-exitcode",
+            help="Exitcode 0 if no changes are present, exitcode 2 if any changes are present",
+            default=False,
+            action="store_true",
+        )
+
         # Subparsers
         subparsers = parser.add_subparsers(dest="action")
         subparsers.required = True
@@ -372,6 +380,9 @@ class SingleDbApp(BaseApp):
 
             if error_count > 0:
                 exit(8)
+
+            if self.args.get("detailed_exitcode") and (engine.suggested_ddl or engine.executed_ddl):
+                exit(2)
 
 
 def entry_point():

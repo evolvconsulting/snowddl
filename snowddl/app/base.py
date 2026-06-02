@@ -294,6 +294,14 @@ class BaseApp:
             help="Clone from another environment with different env_prefix",
         )
 
+        # Detailed exitcode
+        parser.add_argument(
+            "--detailed-exitcode",
+            help="Exitcode 0 if no changes are present, exitcode 2 if any changes are present",
+            default=False,
+            action="store_true",
+        )
+
         # Destroy without env prefix
         parser.add_argument(
             "--destroy-without-prefix", help="Allow {destroy} action without --env-prefix", default=False, action="store_true"
@@ -697,6 +705,9 @@ class BaseApp:
 
             if total_error_count > 0:
                 exit(8)
+
+            if self.args.get("detailed_exitcode") and (engine.suggested_ddl or engine.executed_ddl):
+                exit(2)
 
     def output_engine_context(self, engine: SnowDDLEngine):
         system_roles = []

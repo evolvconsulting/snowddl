@@ -70,17 +70,15 @@ class WarehouseResolver(AbstractResolver):
             query.append_nl("MAX_CLUSTER_COUNT = {max_cluster_count:d}", {"max_cluster_count": bp.max_cluster_count})
             query.append_nl("SCALING_POLICY = {scaling_policy}", {"scaling_policy": bp.scaling_policy})
 
-            if bp.enable_query_acceleration:
-                query.append_nl(
-                    "ENABLE_QUERY_ACCELERATION = {enable_query_acceleration:b}",
-                    {"enable_query_acceleration": bp.enable_query_acceleration},
-                )
+            query.append_nl(
+                "ENABLE_QUERY_ACCELERATION = {enable_query_acceleration:b}",
+                {"enable_query_acceleration": bp.enable_query_acceleration},
+            )
 
-            if bp.query_acceleration_max_scale_factor:
-                query.append_nl(
-                    "QUERY_ACCELERATION_MAX_SCALE_FACTOR = {query_acceleration_max_scale_factor:d}",
-                    {"query_acceleration_max_scale_factor": bp.query_acceleration_max_scale_factor},
-                )
+            query.append_nl(
+                "QUERY_ACCELERATION_MAX_SCALE_FACTOR = {query_acceleration_max_scale_factor:d}",
+                {"query_acceleration_max_scale_factor": bp.query_acceleration_max_scale_factor},
+            )
 
         query.append_nl("COMMENT = {comment}", {"comment": bp.comment})
         query.append_nl(self._build_common_parameters(bp))
