@@ -1,4 +1,5 @@
 from abc import abstractmethod
+from re import compile
 from typing import List, Optional, Tuple, Union
 
 from snowddl.blueprint import (
@@ -19,6 +20,9 @@ from snowddl.blueprint import (
     build_future_grant_name_ident,
 )
 from snowddl.resolver.abc_resolver import AbstractResolver, ResolveResult, ObjectType
+
+
+cortex_search_object_re = compile(r"^.+\._CORTEX_SEARCH_.+_[0-9A-F]{8}_[0-9A-F]{4}_[0-9A-F]{4}_[0-9A-F]{4}_[0-9A-F]{12}$")
 
 
 class AbstractRoleResolver(AbstractResolver):
@@ -92,6 +96,10 @@ class AbstractRoleResolver(AbstractResolver):
 
             # Snowflake bug: phantom MATERIALIZED VIEW when SEARCH OPTIMIZATION is enabled for table
             if object_type == ObjectType.MATERIALIZED_VIEW and str(r["name"]).endswith('IDX_MV_"'):
+                continue
+
+            # Snowflake bug: phantom objects from CORTEX SEARCH appear in grants, but nowhere else
+            if "._CORTEX_SEARCH_" in str(r["name"]) and cortex_search_object_re.match(r["name"]):
                 continue
 
             if object_type == ObjectType.ACCOUNT:

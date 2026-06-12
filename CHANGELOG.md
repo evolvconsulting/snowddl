@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.67.4] - 2026-06-12
+
+- Added workaround for Snowflake bug with Cortex Search objects bleeding into `SHOW GRANTS` output.
+
 ## [0.67.3] - 2026-06-02
 
 - Added CLI option `--detailed-exitcode`. It changes returned exitcode to 2 when any changes were suggested or executed.
