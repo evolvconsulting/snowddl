@@ -19,8 +19,12 @@ def test_step2(helper):
     assert user["email"] is None
     assert user["disabled"] == "true"
 
-    assert user["type"] == "LEGACY_SERVICE"
-    assert user["has_password"] == "true"
+    # Deprecated in Jul 2026, LEGACY_SERVICE is no longer supported
+    # assert user["type"] == "LEGACY_SERVICE"
+    # assert user["has_password"] == "true"
+
+    assert user["type"] == "SERVICE"
+    assert user["has_password"] == "false"
     assert user["has_rsa_public_key"] == "false"
 
 
