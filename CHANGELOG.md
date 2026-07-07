@@ -1,8 +1,11 @@
 # Changelog
 
-## [Unreleased]
+## [0.67.5] - 206-07-07
 
 - Added workaround for Snowflake-managed `SNOWSERVICE-*` integrations (auto-created for Snowpark Container Services / Cortex features) appearing as "does not conform to SnowDDL standards" warnings in `SHOW GRANTS` output.
+- Prevented reset of user parameters starting with `CORTEX_CODE_`. These parameters do not behave normally and require `ACCOUNTADMIN` to change.
+- Removed `xgboost` from test Python UDFs to prevent `pkg_resource` import errors.
+- Upgraded all test Python UDFs to version "3.13".
 
 ## [0.67.4] - 2026-06-12
 

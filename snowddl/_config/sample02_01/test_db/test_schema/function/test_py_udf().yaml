@@ -1,19 +1,17 @@
 language: python
-runtime_version: "3.10"
+runtime_version: "3.13"
 
 returns: VARIANT
 
 packages:
   - numpy
   - pandas
-  - xgboost==1.5.0
 
 handler: udf
 
 body: |-
   import numpy as np
   import pandas as pd
-  import xgboost as xgb
 
   def udf():
-    return [np.__version__, pd.__version__, xgb.__version__]
+    return [np.__version__, pd.__version__]

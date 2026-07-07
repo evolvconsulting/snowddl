@@ -365,6 +365,10 @@ class UserResolver(AbstractResolver):
                 if param_name == "WORKSHEETS_MIGRATED":
                     continue
 
+                # As of Jul 2026, CORTEX_CODE_ parameters do not behave normally and can only be edited by ACCOUNTADMIN
+                if param_name.startswith("CORTEX_CODE_"):
+                    continue
+
                 # Setting parameter to NULL equals to UNSET
                 query.append_nl(
                     "{param_name:r} = NULL",
