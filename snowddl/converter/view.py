@@ -101,7 +101,7 @@ class ViewConverter(AbstractSchemaObjectConverter):
             if token.token_type == TokenType.ALIAS:
                 return row["text"][token.end+2:]
 
-        raise ValueError(f"Could not extract view text after 'AS' keyword using sqlglot tokenizer")
+        raise ValueError("Could not extract view text after 'AS' keyword using sqlglot tokenizer")
 
     def _check_optional_dependencies(self):
         if Tokenizer is None:
