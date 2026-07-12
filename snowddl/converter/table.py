@@ -1,4 +1,4 @@
-from re import compile
+from re import compile, IGNORECASE
 
 from snowddl.blueprint import ObjectType
 from snowddl.converter.abc_converter import ConvertResult
@@ -10,6 +10,13 @@ from snowddl.parser.table import table_json_schema
 cluster_by_syntax_re = compile(r"^(\w+)?\((.*)\)$")
 collate_type_syntax_re = compile(r"^(.*) COLLATE \'(.*)\'$")
 identity_re = compile(r"^IDENTITY START (\d+) INCREMENT (\d+) (ORDER|NOORDER)$")
+
+# OIE fork patch (0.67.5-oie.1) — EMITTER fix for the VECTOR round-trip bug.
+# DESC TABLE emits VECTOR columns with a space after the comma (e.g. "VECTOR(FLOAT, 1536)"),
+# but the table parser's col_type_re rejects that space, so the emitted YAML fails to re-parse
+# on `plan` (halts on the 13 real VECTOR columns). Normalise to the no-space form the parser
+# accepts. Targeted to VECTOR only — no other DESC TABLE type carries an intra-parens space.
+vector_type_re = compile(r"^VECTOR\(\s*(INT|FLOAT)\s*,\s*(\d+)\s*\)$", IGNORECASE)
 
 
 class TableConverter(AbstractSchemaObjectConverter):
@@ -109,7 +116,8 @@ class TableConverter(AbstractSchemaObjectConverter):
         )
 
         for c in cur:
-            m = collate_type_syntax_re.match(c["type"])
+            col_type = self._normalise_col_type(c["type"])
+            m = collate_type_syntax_re.match(col_type)
 
             if m:
                 col = {
@@ -117,7 +125,7 @@ class TableConverter(AbstractSchemaObjectConverter):
                     "collate": m.group(2),
                 }
             else:
-                col = {"type": c["type"]}
+                col = {"type": col_type}
 
             if c["null?"] == "N":
                 col["type"] = f"{col['type']} NOT NULL"
@@ -242,3 +250,14 @@ class TableConverter(AbstractSchemaObjectConverter):
 
     def _get_auto_sequence_name(self, table_name, column_name):
         return self._normalise_name_with_prefix(f"{table_name}_{column_name}_seq")
+
+    def _normalise_col_type(self, col_type: str) -> str:
+        # OIE fork patch (0.67.5-oie.1): collapse the space DESC TABLE emits after the comma
+        # in VECTOR types ("VECTOR(FLOAT, 1536)" -> "VECTOR(FLOAT,1536)") so the emitted YAML
+        # re-parses under the table parser's col_type_re. See module-level note.
+        m = vector_type_re.match(col_type)
+
+        if m:
+            return f"VECTOR({m.group(1).upper()},{m.group(2)})"
+
+        return col_type

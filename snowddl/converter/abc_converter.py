@@ -117,8 +117,12 @@ class AbstractConverter(ABC):
         # Create directory if not exist
         file_path.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
 
-        # Write data as plain text
-        file_path.write_text(content)
+        # Write data as plain text.
+        # OIE fork patch (0.67.5-oie.1): pin encoding="utf-8" — without it Path.write_text uses
+        # the platform default (cp1252 on Windows) and aborts convert (exit 8) on any body/view
+        # text containing non-cp1252 characters (e.g. the "→" arrow in OIE proc comments).
+        # Matches _dump_file above, which already opens with encoding="utf-8".
+        file_path.write_text(content, encoding="utf-8")
 
     def _normalise_name(self, name: str):
         return name.lower()

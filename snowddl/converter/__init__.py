@@ -8,6 +8,9 @@ from .table import TableConverter
 from .task import TaskConverter
 from .view import ViewConverter
 from .function import FunctionConverter
+from .procedure import ProcedureConverter
+from .stream import StreamConverter
+from .dynamic_table import DynamicTableConverter
 
 default_converter_sequence = [
     DatabaseConverter,
@@ -17,4 +20,8 @@ default_converter_sequence = [
     TaskConverter,
     ViewConverter,
     FunctionConverter,
+    # OIE fork patch (0.67.5-oie.1): converters upstream lacks (parser+resolver exist).
+    ProcedureConverter,
+    StreamConverter,
+    DynamicTableConverter,
 ]

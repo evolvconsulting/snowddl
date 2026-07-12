@@ -128,7 +128,22 @@ class FunctionConverter(AbstractSchemaObjectConverter):
         return self._get_returns_single(desc_func_row)
 
     def _get_returns_single(self, desc_func_row: dict):
-        return str(DataType(desc_func_row["returns"]))
+        returns = str(desc_func_row["returns"])
+
+        # OIE fork patch (0.67.5-oie.1): DESC FUNCTION / DESC PROCEDURE can report a base
+        # type without its size properties (e.g. bare "VARCHAR"), which DataType() rejects
+        # ("Invalid number of properties ... expected exactly [1]") and aborts convert (exit 8).
+        # Default the missing length via BaseDataType.default_properties so the value round-trips.
+        if "(" not in returns:
+            try:
+                base_type = BaseDataType[returns.upper()]
+            except KeyError:
+                base_type = None
+
+            if base_type is not None and base_type.number_of_properties > 0:
+                return str(DataType.from_base_type(base_type))
+
+        return str(DataType(returns))
 
     def _get_returns_table(self, desc_func_row: dict):
         returns = {}
