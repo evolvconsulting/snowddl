@@ -12,12 +12,18 @@ Covers the two parser/emitter fixes carried on top of upstream 0.67.5. Pure-unit
     (no length), which DataType() rejected -> convert aborted (exit 8). Now defaulted.
 """
 
+from types import SimpleNamespace
+
+import jsonschema
 import pytest
 
-from snowddl.blueprint import DataType
+from snowddl.blueprint import DataType, AccountObjectIdent
 from snowddl.converter.table import TableConverter
 from snowddl.converter.function import FunctionConverter
 from snowddl.parser.table import col_type_re
+from snowddl.parser.procedure import procedure_json_schema
+from snowddl.parser.function import function_json_schema
+from snowddl.resolver.procedure import ProcedureResolver
 
 
 # --- Fix #1: VECTOR emitter round-trip -------------------------------------
@@ -77,3 +83,69 @@ def test_bare_varchar_upstream_would_crash():
     # so this test is non-vacuous.
     with pytest.raises(ValueError):
         DataType("VARCHAR")
+
+
+# --- Patch #8: object-level grants on procedures/functions -----------------
+# Procedures/functions cannot COPY GRANTS, so CREATE OR REPLACE drops their
+# grants. A `grants` config field is re-applied on every create/replace (self-
+# heal, additive) and captured on import so the round-trip is reproducible.
+
+
+@pytest.mark.parametrize("schema", [procedure_json_schema, function_json_schema])
+def test_grants_field_accepted(schema):
+    doc = {"returns": "VARCHAR(16777216)", "body": "x", "grants": {"USAGE": ["OIE_ENGINEER"]}}
+    jsonschema.validate(doc, schema)  # must not raise
+
+
+@pytest.mark.parametrize("schema", [procedure_json_schema, function_json_schema])
+def test_grants_value_must_be_role_list(schema):
+    # A privilege must map to an array of role names, not a bare string.
+    doc = {"returns": "VARCHAR(16777216)", "body": "x", "grants": {"USAGE": "OIE_ENGINEER"}}
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(doc, schema)
+
+
+def _fake_converter(rows):
+    return SimpleNamespace(engine=SimpleNamespace(execute_meta=lambda template, params: rows))
+
+
+def test_get_object_grants_captures_role_privileges_only():
+    rows = [
+        {"privilege": "USAGE", "granted_to": "ROLE", "grantee_name": "OIE_ENGINEER"},
+        {"privilege": "OWNERSHIP", "granted_to": "ROLE", "grantee_name": "OIE_ADMIN"},  # ownership excluded
+        {"privilege": "USAGE", "granted_to": "USER", "grantee_name": "SOMEBODY"},  # user grant excluded (SCIM)
+        {"privilege": "USAGE", "granted_to": "ROLE", "grantee_name": "OIE_ADMIN"},
+    ]
+    result = FunctionConverter._get_object_grants(_fake_converter(rows), "PROCEDURE", "OIE", "MDM", "SP_X", "VARCHAR")
+    assert result == {"USAGE": ["OIE_ADMIN", "OIE_ENGINEER"]}  # sorted; ownership + user grants dropped
+
+
+def test_get_object_grants_none_when_no_role_privileges():
+    rows = [{"privilege": "OWNERSHIP", "granted_to": "ROLE", "grantee_name": "OIE_ADMIN"}]
+    assert FunctionConverter._get_object_grants(_fake_converter(rows), "FUNCTION", "OIE", "MDM", "F", "") is None
+
+
+def test_apply_object_grants_noop_when_absent():
+    # No grants field -> no GRANT issued (never touches the engine).
+    issued = []
+    fake = SimpleNamespace(
+        engine=SimpleNamespace(execute_safe_ddl=lambda *a, **k: issued.append(1)),
+        config=SimpleNamespace(env_prefix=""),
+    )
+    ProcedureResolver._apply_object_grants(fake, SimpleNamespace(grants=None, full_name="X"))
+    assert issued == []
+
+
+def test_apply_object_grants_issues_one_grant_per_role():
+    issued = []
+    fake = SimpleNamespace(
+        engine=SimpleNamespace(execute_safe_ddl=lambda template, params: issued.append((template, params))),
+        config=SimpleNamespace(env_prefix=""),
+    )
+    bp = SimpleNamespace(grants={"USAGE": ["OIE_ENGINEER", "OIE_ADMIN"]}, full_name="FULLNAME")
+    ProcedureResolver._apply_object_grants(fake, bp)
+
+    assert len(issued) == 2
+    assert all("GRANT {privilege:r} ON PROCEDURE {full_name:i} TO ROLE {role:i}" == t for t, p in issued)
+    assert {p["privilege"] for t, p in issued} == {"USAGE"}
+    assert all(isinstance(p["role"], AccountObjectIdent) for t, p in issued)

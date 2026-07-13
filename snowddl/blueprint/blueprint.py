@@ -243,6 +243,9 @@ class FunctionBlueprint(SchemaObjectBlueprint):
     handler: Optional[str] = None
     external_access_integrations: Optional[List[AccountObjectIdent]] = None
     secrets: Optional[Dict[str, SchemaObjectIdent]] = None
+    # OIE patch (#8): object-level grants re-applied on every CREATE OR REPLACE
+    # (functions cannot COPY GRANTS). {privilege: [role_name, ...]}.
+    grants: Optional[Dict[str, List[str]]] = None
 
 
 class HybridTableBlueprint(SchemaObjectBlueprint, DependsOnMixin):
@@ -342,6 +345,9 @@ class ProcedureBlueprint(SchemaObjectBlueprint):
     handler: Optional[str] = None
     external_access_integrations: Optional[List[AccountObjectIdent]] = None
     secrets: Optional[Dict[str, SchemaObjectIdent]] = None
+    # OIE patch (#8): object-level grants re-applied on every CREATE OR REPLACE
+    # (procedures/functions cannot COPY GRANTS). {privilege: [role_name, ...]}.
+    grants: Optional[Dict[str, List[str]]] = None
 
 
 class ProjectionPolicyBlueprint(SchemaObjectBlueprint):

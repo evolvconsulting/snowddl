@@ -118,6 +118,16 @@ function_json_schema = {
                 "type": "string"
             },
         },
+        "grants": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                },
+                "minItems": 1
+            }
+        },
         "comment": {
             "type": "string"
         }
@@ -162,6 +172,7 @@ class FunctionParser(AbstractParser):
             handler=f.params.get("handler"),
             external_access_integrations=self.get_external_access_integrations(f),
             secrets=self.get_secrets(f),
+            grants=f.params.get("grants"),
             comment=f.params.get("comment"),
         )
 

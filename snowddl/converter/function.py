@@ -77,6 +77,7 @@ class FunctionConverter(AbstractSchemaObjectConverter):
             "packages": self._get_packages(desc_func_row),
             "handler": desc_func_row.get("handler"),
             "body": self._get_body_or_include(object_path, row["name"], dtypes, desc_func_row),
+            "grants": self._get_object_grants("FUNCTION", row["database"], row["schema"], row["name"], dtypes),
             "comment": row.get("comment"),
         }
 
@@ -86,6 +87,36 @@ class FunctionConverter(AbstractSchemaObjectConverter):
             return ConvertResult.DUMP
 
         return ConvertResult.EMPTY
+
+    def _get_object_grants(self, object_type: str, database: str, schema: str, name: str, dtypes: str):
+        # OIE patch (#8): capture object-level grants (e.g. USAGE -> ROLE) so a
+        # re-import round-trips them into the `grants` config field. Ownership is
+        # excluded (transferred, not granted); user grants are excluded
+        # (membership is owned by SCIM, not SnowDDL).
+        cur = self.engine.execute_meta(
+            "SHOW GRANTS ON {object_type:r} {database:i}.{schema:i}.{name:i}({dtypes:r})",
+            {
+                "object_type": object_type,
+                "database": database,
+                "schema": schema,
+                "name": name,
+                "dtypes": dtypes,
+            },
+        )
+
+        grants = {}
+
+        for r in cur:
+            if r["granted_to"] != "ROLE" or r["privilege"] == "OWNERSHIP":
+                continue
+
+            grants.setdefault(r["privilege"], []).append(r["grantee_name"])
+
+        if not grants:
+            return None
+
+        # Deterministic output for stable diffs
+        return {privilege: sorted(roles) for privilege, roles in sorted(grants.items())}
 
     def _get_body_or_include(self, object_path: Path, name: str, dtypes: str, desc_func_row: dict):
         if not desc_func_row.get("body"):

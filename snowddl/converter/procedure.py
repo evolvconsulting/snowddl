@@ -68,6 +68,7 @@ class ProcedureConverter(FunctionConverter):
             "packages": self._get_packages(desc_proc_row),
             "handler": desc_proc_row.get("handler"),
             "body": self._get_body_or_include(object_path, row["name"], dtypes, desc_proc_row),
+            "grants": self._get_object_grants("PROCEDURE", row["database"], row["schema"], row["name"], dtypes),
             "comment": row.get("comment"),
         }
 

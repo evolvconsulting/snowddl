@@ -1,4 +1,4 @@
-from snowddl.blueprint import FunctionBlueprint
+from snowddl.blueprint import FunctionBlueprint, AccountObjectIdent
 from snowddl.resolver.abc_schema_object_resolver import AbstractSchemaObjectResolver, ResolveResult, ObjectType
 from snowddl.resolver._utils import dtypes_from_arguments
 
@@ -54,6 +54,8 @@ class FunctionResolver(AbstractSchemaObjectResolver):
             },
         )
 
+        self._apply_object_grants(bp)
+
         return ResolveResult.CREATE
 
     def compare_object(self, bp: FunctionBlueprint, row: dict):
@@ -69,6 +71,8 @@ class FunctionResolver(AbstractSchemaObjectResolver):
                     "comment": query.add_short_hash(bp.comment),
                 },
             )
+
+            self._apply_object_grants(bp)
 
             return ResolveResult.REPLACE
 
@@ -86,6 +90,26 @@ class FunctionResolver(AbstractSchemaObjectResolver):
         )
 
         return ResolveResult.DROP
+
+    def _apply_object_grants(self, bp: FunctionBlueprint):
+        # OIE patch (#8): functions cannot COPY GRANTS, so CREATE OR REPLACE
+        # drops object-level grants. Re-issue the declared grants after every
+        # create/replace so they self-heal within the same apply. Additive by
+        # design: this never REVOKEs, so removing a grant from config does not
+        # drop it live (removal stays an explicit, out-of-band act).
+        if not bp.grants:
+            return
+
+        for privilege, roles in bp.grants.items():
+            for role in roles:
+                self.engine.execute_safe_ddl(
+                    "GRANT {privilege:r} ON FUNCTION {full_name:i} TO ROLE {role:i}",
+                    {
+                        "privilege": privilege,
+                        "full_name": bp.full_name,
+                        "role": AccountObjectIdent(self.config.env_prefix, role),
+                    },
+                )
 
     def _build_create_function(self, bp: FunctionBlueprint):
         query = self.engine.query_builder()
