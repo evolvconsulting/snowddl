@@ -220,7 +220,10 @@ class BaseApp:
             action="store_true",
         )
         parser.add_argument(
-            "--apply-join-policy", help="Additionally apply changes to JOIN POLICIES", default=False, action="store_true",
+            "--apply-join-policy",
+            help="Additionally apply changes to JOIN POLICIES",
+            default=False,
+            action="store_true",
         )
         parser.add_argument(
             "--apply-masking-policy", help="Additionally apply changes to MASKING POLICIES", default=False, action="store_true"
@@ -255,7 +258,10 @@ class BaseApp:
             "--refresh-user-passwords", help="Additionally refresh passwords of users", default=False, action="store_true"
         )
         parser.add_argument(
-            "--refresh-workload-identity", help="Additionally refresh workload identites of users", default=False, action="store_true"
+            "--refresh-workload-identity",
+            help="Additionally refresh workload identites of users",
+            default=False,
+            action="store_true",
         )
         parser.add_argument(
             "--refresh-future-grants",
@@ -597,6 +603,16 @@ class BaseApp:
             "application": f"{self.application_name} {self.application_version}",
         }
 
+        # OIE patch (#7): set a session database so object bodies with two-part
+        # (SCHEMA.OBJECT) references resolve at CREATE time. SQL scalar UDFs
+        # validate referenced UDFs strictly at creation; without a current
+        # database a body ref like MDM.NORMALIZE_ORG_NAME fails "unknown
+        # user-defined function". Sourced from SNOWFLAKE_DATABASE env so the
+        # same CLI targets clone (SNOWFLAKE_DATABASE=OIE_SNOWDDL_CLONE) or prod
+        # (=OIE). No-op if unset (upstream behavior preserved).
+        if environ.get("SNOWFLAKE_DATABASE"):
+            options["database"] = environ["SNOWFLAKE_DATABASE"]
+
         if self.args.get("authenticator") == "snowflake":
             key_bytes = None
 
@@ -652,7 +668,9 @@ class BaseApp:
             options["token"] = self.args["workload_identity_token"]
 
         else:
-            raise ValueError("Only 'snowflake', 'externalbrowser', 'oauth', 'oauth_snowpark' and 'workload_identity' authenticators are supported")
+            raise ValueError(
+                "Only 'snowflake', 'externalbrowser', 'oauth', 'oauth_snowpark' and 'workload_identity' authenticators are supported"
+            )
 
         if self.args.get("query_tag"):
             options["session_parameters"] = {
