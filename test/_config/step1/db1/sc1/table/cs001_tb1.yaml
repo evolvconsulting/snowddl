@@ -1,0 +1,6 @@
+columns:
+  chunk_text: VARCHAR(16777216)
+  occurred_at: TIMESTAMP_NTZ(9)
+  source_type: VARCHAR(255)
+
+change_tracking: true

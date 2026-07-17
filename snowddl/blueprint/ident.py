@@ -223,3 +223,20 @@ class TableConstraintIdent(SchemaObjectIdent):
     @property
     def table_full_name(self):
         return SchemaObjectIdent(self.env_prefix, self.database, self.schema, self.name)
+
+
+class TableCheckConstraintIdent(SchemaObjectIdent):
+    # Unlike PRIMARY / UNIQUE / FOREIGN keys, Snowflake CHECK constraints are addressed by name,
+    # not by column set. The constraint name is used as the argument part to keep the diff identity
+    # unique per table and to preserve the exact name (required for the plan-in-sync proof).
+    def __init__(self, env_prefix, database, schema, name, constraint_name: str):
+        super().__init__(env_prefix, database, schema, name)
+
+        self.constraint_name = constraint_name
+
+    def parts_for_format(self):
+        return [f"{self.env_prefix}{self.database}", self.schema, self.name], [self.constraint_name]
+
+    @property
+    def table_full_name(self):
+        return SchemaObjectIdent(self.env_prefix, self.database, self.schema, self.name)
