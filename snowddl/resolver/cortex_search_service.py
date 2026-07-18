@@ -5,6 +5,11 @@ from snowddl.resolver.abc_schema_object_resolver import AbstractSchemaObjectReso
 
 
 class CortexSearchServiceResolver(AbstractSchemaObjectResolver):
+    # Mirrors the semantic_view resolver: skip the (per-schema) SHOW when no Cortex Search Services are
+    # configured, avoiding overhead / edition-compatibility issues on accounts that never use them.
+    # Trade-off: removing the *last* service from config will not drop it via `apply` (the resolver is
+    # skipped when there are zero blueprints); it is still dropped by `destroy`. OIE always keeps the
+    # service in config, so this does not affect the plan-in-sync guarantee.
     skip_on_empty_blueprints = True
 
     def get_object_type(self) -> ObjectType:

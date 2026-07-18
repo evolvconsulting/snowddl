@@ -1,0 +1,10 @@
+search_column: chunk_text
+attributes:
+  - occurred_at
+  - source_type
+warehouse: cs001_wh1
+# target_lag changed 1 day -> 2 days (exercises CREATE OR REPLACE on change)
+target_lag: 2 days
+text: |-
+  SELECT chunk_text, occurred_at, source_type
+  FROM ${{ env_prefix }}db1.sc1.cs001_tb1
