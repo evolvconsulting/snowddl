@@ -1,0 +1,10 @@
+columns:
+  id: NUMBER(38,0)
+  source_pipeline: VARCHAR(255)
+  body_content_type: VARCHAR(255)
+  score: NUMBER(38,0)
+
+check:
+  CC001_SOURCE_CHK: "SOURCE_PIPELINE = 'outlook'"
+  CC001_BODY_CT_CHK: "BODY_CONTENT_TYPE IN ('text', 'html')"
+  CC001_SCORE_RANGE_CHK: "SCORE >= 0 AND SCORE <= 100"

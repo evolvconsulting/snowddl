@@ -65,6 +65,35 @@ class Helper:
 
         return {r["name"]: r for r in cur}
 
+    def get_table_ddl(self, database, schema, name):
+        cur = self.execute(
+            "SELECT GET_DDL('TABLE', {full_name}, TRUE) AS ddl_text",
+            {"full_name": str(SchemaObjectIdent(self.env_prefix, database, schema, name))},
+        )
+
+        row = cur.fetchone()
+
+        return row["DDL_TEXT"] if row else None
+
+    def show_cortex_search_service(self, database, schema, name):
+        cur = self.execute(
+            "SHOW CORTEX SEARCH SERVICES LIKE {object_name:lf} IN SCHEMA {schema_name:i}",
+            {
+                "schema_name": SchemaIdent(self.env_prefix, database, schema),
+                "object_name": Ident(name),
+            },
+        )
+
+        return cur.fetchone()
+
+    def desc_cortex_search_service(self, database, schema, name):
+        cur = self.execute(
+            "DESC CORTEX SEARCH SERVICE {name:i}",
+            {"name": SchemaObjectIdent(self.env_prefix, database, schema, name)},
+        )
+
+        return cur.fetchone()
+
     def desc_view(self, database, schema, name):
         cur = self.execute("DESC VIEW {name:i}", {"name": SchemaObjectIdent(self.env_prefix, database, schema, name)})
 

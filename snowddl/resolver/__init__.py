@@ -8,7 +8,9 @@ from .alert import AlertResolver
 from .backup_policy import BackupPolicyResolver
 from .backup_set import BackupSetResolver
 from .business_role import BusinessRoleResolver
+from .check_constraint import CheckConstraintResolver
 from .clone_table import CloneTableResolver
+from .cortex_search_service import CortexSearchServiceResolver
 from .database import DatabaseResolver
 from .database_delayed import DatabaseDelayedResolver
 from .database_owner_role import DatabaseOwnerRoleResolver
@@ -95,9 +97,11 @@ default_resolve_sequence = [
     PrimaryKeyResolver,
     UniqueKeyResolver,
     ForeignKeyResolver,
+    CheckConstraintResolver,
     MaterializedViewResolver,
     ViewResolver,
     SemanticViewResolver,
+    CortexSearchServiceResolver,
     PipeResolver,
     StreamResolver,
     TaskResolver,
@@ -175,9 +179,11 @@ singledb_resolve_sequence = [
     PrimaryKeyResolver,
     UniqueKeyResolver,
     ForeignKeyResolver,
+    CheckConstraintResolver,
     MaterializedViewResolver,
     ViewResolver,
     SemanticViewResolver,
+    CortexSearchServiceResolver,
     PipeResolver,
     StreamResolver,
     TaskResolver,

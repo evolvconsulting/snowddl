@@ -9,6 +9,7 @@ from .authentication_policy import AuthenticationPolicyParser
 from .backup_policy import BackupPolicyParser
 from .backup_set import BackupSetParser
 from .business_role import BusinessRoleParser
+from .cortex_search_service import CortexSearchServiceParser
 from .database import DatabaseParser
 from .database_role import DatabaseRoleParser
 from .dynamic_table import DynamicTableParser
@@ -83,6 +84,7 @@ default_parse_sequence = [
     MaterializedViewParser,
     ViewParser,
     SemanticViewParser,
+    CortexSearchServiceParser,
     PipeParser,
     StreamParser,
     TaskParser,
@@ -124,6 +126,7 @@ singledb_parse_sequence = [
     MaterializedViewParser,
     ViewParser,
     SemanticViewParser,
+    CortexSearchServiceParser,
     PipeParser,
     StreamParser,
     TaskParser,

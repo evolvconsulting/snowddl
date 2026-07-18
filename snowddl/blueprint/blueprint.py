@@ -27,6 +27,7 @@ from .ident import (
     SchemaObjectIdentWithArgs,
     StageFileIdent,
     TableConstraintIdent,
+    TableCheckConstraintIdent,
 )
 from .ident_pattern import IdentPattern
 from .object_type import ObjectType
@@ -123,6 +124,23 @@ class BusinessRoleBlueprint(AbstractBlueprint):
     application_roles: List[ApplicationRoleIdent] = []
     technical_roles: List[AccountObjectIdent] = []
     global_roles: List[Ident] = []
+
+
+class CheckConstraintBlueprint(SchemaObjectBlueprint):
+    full_name: TableCheckConstraintIdent
+    table_name: SchemaObjectIdent
+    expression: str
+
+
+class CortexSearchServiceBlueprint(SchemaObjectBlueprint):
+    # "search_column" rather than "on": bare "on" is parsed as boolean True by the YAML loader
+    search_column: Ident
+    vector_indexes: Optional[List[Ident]] = None
+    attributes: List[Ident] = []
+    warehouse: AccountObjectIdent
+    target_lag: str
+    refresh_mode: Optional[str] = None
+    text: str
 
 
 class DatabaseBlueprint(AbstractBlueprint):

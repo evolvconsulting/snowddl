@@ -5,6 +5,7 @@ from typing import Dict, List, Union
 from snowddl.blueprint import (
     TableBlueprint,
     TableColumn,
+    CheckConstraintBlueprint,
     PrimaryKeyBlueprint,
     UniqueKeyBlueprint,
     ForeignKeyBlueprint,
@@ -12,6 +13,7 @@ from snowddl.blueprint import (
     Ident,
     SchemaObjectIdent,
     TableConstraintIdent,
+    TableCheckConstraintIdent,
     build_schema_object_ident,
     SearchOptimizationItem,
     ObjectType,
@@ -144,6 +146,13 @@ table_json_schema = {
                 "additionalProperties": False
             },
             "minItems": 1
+        },
+        "check": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "string"
+            },
+            "minProperties": 1
         },
         "is_transient": {
             "type": "boolean"
@@ -347,6 +356,18 @@ class TableParser(AbstractParser):
             )
 
             self.config.add_blueprint(key_bp)
+
+        for constraint_name, check_expr in f.params.get("check", {}).items():
+            check_bp = CheckConstraintBlueprint(
+                full_name=TableCheckConstraintIdent(
+                    self.env_prefix, f.database, f.schema, f.name, constraint_name=constraint_name
+                ),
+                table_name=SchemaObjectIdent(self.env_prefix, f.database, f.schema, f.name),
+                expression=check_expr,
+                comment=None,
+            )
+
+            self.config.add_blueprint(check_bp)
 
         # Policies
 

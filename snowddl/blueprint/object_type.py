@@ -63,6 +63,7 @@ class ObjectType(Enum):
         "singular": "CORTEX SEARCH SERVICE",
         "plural": "CORTEX SEARCH SERVICES",
         "is_future_grant_supported": True,
+        "blueprint_cls": "CortexSearchServiceBlueprint",
     }
 
     DATABASE = {
@@ -363,6 +364,12 @@ class ObjectType(Enum):
         "singular": "FOREIGN KEY",
         "plural": "FOREIGN KEYS",
         "blueprint_cls": "ForeignKeyBlueprint",
+    }
+
+    CHECK_CONSTRAINT = {
+        "singular": "CHECK CONSTRAINT",
+        "plural": "CHECK CONSTRAINTS",
+        "blueprint_cls": "CheckConstraintBlueprint",
     }
 
     @property

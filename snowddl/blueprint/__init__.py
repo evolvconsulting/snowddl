@@ -10,6 +10,8 @@ from .blueprint import (
     BackupPolicyBlueprint,
     BackupSetBlueprint,
     BusinessRoleBlueprint,
+    CheckConstraintBlueprint,
+    CortexSearchServiceBlueprint,
     DatabaseBlueprint,
     DatabaseRoleBlueprint,
     DynamicTableBlueprint,
@@ -80,6 +82,7 @@ from .ident import (
     SchemaObjectIdentWithArgs,
     StageFileIdent,
     TableConstraintIdent,
+    TableCheckConstraintIdent,
 )
 
 from .ident_builder import (

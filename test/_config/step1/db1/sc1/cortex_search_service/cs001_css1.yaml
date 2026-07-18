@@ -1,0 +1,9 @@
+search_column: chunk_text
+attributes:
+  - occurred_at
+  - source_type
+warehouse: cs001_wh1
+target_lag: 1 day
+text: |-
+  SELECT chunk_text, occurred_at, source_type
+  FROM ${{ env_prefix }}db1.sc1.cs001_tb1

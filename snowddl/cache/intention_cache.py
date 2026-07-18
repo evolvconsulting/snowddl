@@ -2,6 +2,7 @@ from collections import defaultdict
 from typing import Dict, Set, TYPE_CHECKING
 
 from snowddl.blueprint import (
+    CheckConstraintBlueprint,
     DatabaseRoleBlueprint,
     ForeignKeyBlueprint,
     ObjectType,
@@ -60,7 +61,7 @@ class IntentionCache:
             return True
 
         # All table constraints are implicitly dropped by various TABLE types which support constraints
-        if issubclass(blueprint_cls, (ForeignKeyBlueprint, PrimaryKeyBlueprint, UniqueKeyBlueprint)) and (
+        if issubclass(blueprint_cls, (CheckConstraintBlueprint, ForeignKeyBlueprint, PrimaryKeyBlueprint, UniqueKeyBlueprint)) and (
             schema_object_name in self.object_drop_intention[ObjectType.TABLE]
             or schema_object_name in self.object_drop_intention[ObjectType.EXTERNAL_TABLE]
             or schema_object_name in self.object_drop_intention[ObjectType.HYBRID_TABLE]
