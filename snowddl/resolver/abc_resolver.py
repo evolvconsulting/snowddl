@@ -80,6 +80,14 @@ class AbstractResolver(ABC):
             tasks = {}
 
             for full_name in sorted(blueprint_names_batch):
+                # OIE fork (D-218): a blueprint living in an unmanaged (is_sandbox)
+                # schema is recognized but never reconciled — skip create/compare so
+                # the applying role never issues DDL against a schema another tier owns
+                # (e.g. GOVERNANCE/OPS/PUBLIC/OIE_MDM_CI_TEST under OIE_SVC_DEPLOY).
+                if self._is_unmanaged_blueprint(full_name):
+                    self.resolved_objects[full_name] = ResolveResult.SKIP
+                    continue
+
                 if full_name in self.existing_objects:
                     tasks[full_name] = (self.compare_object, self.blueprints[full_name], self.existing_objects[full_name])
                 else:
@@ -213,6 +221,14 @@ class AbstractResolver(ABC):
 
     def _post_process(self):
         pass
+
+    def _is_unmanaged_blueprint(self, full_name: str) -> bool:
+        # OIE fork (D-218): recognize-but-do-not-manage hook. Default: manage
+        # everything (upstream behavior). SchemaResolver / AbstractSchemaObjectResolver
+        # override this to skip objects in schemas flagged `is_sandbox`, so a
+        # whole-config apply run by a role that does not own (and may not even see)
+        # another tier's schema exits cleanly instead of erroring on CREATE/ALTER.
+        return False
 
     @abstractmethod
     def get_object_type(self) -> ObjectType:

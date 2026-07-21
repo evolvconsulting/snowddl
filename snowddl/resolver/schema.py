@@ -12,6 +12,16 @@ class SchemaResolver(AbstractResolver):
     def get_blueprints(self):
         return self.config.get_blueprints_by_type(SchemaBlueprint)
 
+    def _is_unmanaged_blueprint(self, full_name: str) -> bool:
+        # OIE fork (D-218): an is_sandbox schema is recognized-but-not-managed —
+        # skip its CREATE / ALTER / COMMENT. Keys off the blueprint (config), not the
+        # live cache, so it applies whether the schema is visible to the applying role
+        # (GOVERNANCE, hits compare) or invisible (OPS/PUBLIC/OIE_MDM_CI_TEST, which
+        # SnowDDL would otherwise try to CREATE and fail with "already exists, no
+        # privileges"). The schema is still never dropped (it stays in blueprints).
+        bp = self.blueprints.get(full_name)
+        return bool(bp is not None and getattr(bp, "is_sandbox", False))
+
     def create_object(self, bp: SchemaBlueprint):
         query = self.engine.query_builder()
         query.append("CREATE")
@@ -51,9 +61,7 @@ class SchemaResolver(AbstractResolver):
         if bp.quoted_identifiers_ignore_case:
             query.append_nl(
                 "QUOTED_IDENTIFIERS_IGNORE_CASE = {quoted_identifiers_ignore_case:b}",
-                {
-                    "quoted_identifiers_ignore_case": bp.quoted_identifiers_ignore_case
-                }
+                {"quoted_identifiers_ignore_case": bp.quoted_identifiers_ignore_case},
             )
 
         if bp.comment:
@@ -84,7 +92,7 @@ class SchemaResolver(AbstractResolver):
                 {
                     "full_name": bp.full_name,
                     "retention_time": bp.retention_time,
-                }
+                },
             )
 
             result = ResolveResult.ALTER
@@ -96,14 +104,14 @@ class SchemaResolver(AbstractResolver):
                     {
                         "full_name": bp.full_name,
                         "external_volume": bp.external_volume,
-                    }
+                    },
                 )
             else:
                 self.engine.execute_unsafe_ddl(
                     "ALTER SCHEMA {full_name:i} UNSET EXTERNAL_VOLUME",
                     {
                         "full_name": bp.full_name,
-                    }
+                    },
                 )
 
             result = ResolveResult.ALTER
@@ -115,14 +123,14 @@ class SchemaResolver(AbstractResolver):
                     {
                         "full_name": bp.full_name,
                         "catalog": bp.catalog,
-                    }
+                    },
                 )
             else:
                 self.engine.execute_unsafe_ddl(
                     "ALTER SCHEMA {full_name:i} UNSET CATALOG",
                     {
                         "full_name": bp.full_name,
-                    }
+                    },
                 )
 
             result = ResolveResult.ALTER
@@ -134,14 +142,14 @@ class SchemaResolver(AbstractResolver):
                     {
                         "full_name": bp.full_name,
                         "catalog_sync": bp.catalog_sync,
-                    }
+                    },
                 )
             else:
                 self.engine.execute_unsafe_ddl(
                     "ALTER SCHEMA {full_name:i} UNSET CATALOG_SYNC",
                     {
                         "full_name": bp.full_name,
-                    }
+                    },
                 )
 
             result = ResolveResult.ALTER
