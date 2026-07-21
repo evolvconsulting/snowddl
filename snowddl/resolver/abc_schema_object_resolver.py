@@ -20,6 +20,16 @@ class AbstractSchemaObjectResolver(AbstractResolver):
     def get_existing_objects_in_schema(self, schema: dict):
         pass
 
+    def _is_unmanaged_blueprint(self, full_name: str) -> bool:
+        # OIE fork (D-218): skip create/compare of any schema object whose parent
+        # schema is flagged is_sandbox (recognize-but-not-managed). Mirrors the
+        # existing is_sandbox drop-skip below, extending it to reconciliation so a
+        # declared child in another tier's schema (e.g. OPS.SP_PROVISION_REHEARSAL_CLONE)
+        # is never CREATE-OR-REPLACE'd by a role that does not own OPS.
+        schema_full_name = ".".join(full_name.split(".")[:2])
+        schema_bp = self.config.get_blueprints_by_type(SchemaBlueprint).get(schema_full_name)
+        return bool(schema_bp is not None and getattr(schema_bp, "is_sandbox", False))
+
     def _resolve_drop(self):
         tasks = {}
 
