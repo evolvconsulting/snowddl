@@ -21,6 +21,9 @@ alert_json_schema = {
         "comment": {
             "type": "string"
         },
+        "enabled": {
+            "type": "boolean"
+        },
     },
     "required": ["schedule", "condition", "action"],
     "additionalProperties": False,
@@ -40,6 +43,7 @@ class AlertParser(AbstractParser):
             condition=self.normalise_sql_text_param(f.params["condition"]),
             action=self.normalise_sql_text_param(f.params["action"]),
             comment=f.params.get("comment"),
+            enabled=f.params.get("enabled", True),
         )
 
         self.config.add_blueprint(bp)

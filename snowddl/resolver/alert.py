@@ -72,12 +72,50 @@ class AlertResolver(AbstractSchemaObjectResolver):
 
         self.engine.execute_safe_ddl(query)
 
+        # Snowflake creates every alert SUSPENDED. Resume it unless the blueprint
+        # explicitly disables it, so a declared alert is actually running after
+        # `snowddl apply` — otherwise the object exists but never fires.
+        if bp.enabled:
+            self.engine.execute_safe_ddl(
+                "ALTER ALERT {full_name:i} RESUME",
+                {
+                    "full_name": bp.full_name,
+                },
+            )
+
         return ResolveResult.CREATE
 
     def compare_object(self, bp: AlertBlueprint, row: dict):
         result = ResolveResult.NOCHANGE
 
-        if bp.warehouse != row["warehouse"]:
+        # Normalise warehouse for comparison: bp.warehouse is an Ident (or None),
+        # row["warehouse"] is a bare string from SHOW ALERTS ("" when unset).
+        bp_warehouse = str(bp.warehouse) if bp.warehouse else None
+        row_warehouse = row["warehouse"] if row["warehouse"] else None
+
+        warehouse_changed = bp_warehouse != row_warehouse
+        schedule_changed = str(bp.schedule) != row["schedule"]
+        condition_changed = str(bp.condition) != row["condition"]
+        action_changed = str(bp.action) != row["action"]
+
+        needs_definition_alter = warehouse_changed or schedule_changed or condition_changed or action_changed
+
+        was_started = (row.get("state") or "").upper() == "STARTED"
+
+        # Snowflake requires an alert to be SUSPENDED before its definition can be
+        # modified. Suspend first if we're about to alter a running alert; we
+        # restore the desired run-state at the end.
+        suspended_for_alter = False
+        if needs_definition_alter and was_started:
+            self.engine.execute_safe_ddl(
+                "ALTER ALERT {full_name:i} SUSPEND",
+                {
+                    "full_name": bp.full_name,
+                },
+            )
+            suspended_for_alter = True
+
+        if warehouse_changed:
             if bp.warehouse:
                 self.engine.execute_safe_ddl(
                     "ALTER ALERT {full_name:i} SET WAREHOUSE = {warehouse:i}",
@@ -91,13 +129,12 @@ class AlertResolver(AbstractSchemaObjectResolver):
                     "ALTER ALERT {full_name:i} UNSET WAREHOUSE",
                     {
                         "full_name": bp.full_name,
-                        "warehouse": bp.warehouse,
                     },
                 )
 
             result = ResolveResult.ALTER
 
-        if str(bp.schedule) != row["schedule"]:
+        if schedule_changed:
             self.engine.execute_safe_ddl(
                 "ALTER ALERT {full_name:i} SET SCHEDULE = {schedule}",
                 {
@@ -108,7 +145,7 @@ class AlertResolver(AbstractSchemaObjectResolver):
 
             result = ResolveResult.ALTER
 
-        if str(bp.condition) != row["condition"]:
+        if condition_changed:
             query = self.engine.query_builder()
 
             query.append(
@@ -125,7 +162,7 @@ class AlertResolver(AbstractSchemaObjectResolver):
 
             result = ResolveResult.ALTER
 
-        if str(bp.action) != row["action"]:
+        if action_changed:
             query = self.engine.query_builder()
 
             query.append(
@@ -140,6 +177,35 @@ class AlertResolver(AbstractSchemaObjectResolver):
             self.engine.execute_safe_ddl(query)
 
             result = ResolveResult.ALTER
+
+        # Reconcile the run-state (RESUME/SUSPEND). A state mismatch on its own is
+        # a real ALTER; re-resuming after a definition alter merely restores the
+        # state we interrupted and is not itself counted as a change.
+        if bp.enabled:
+            if not was_started:
+                self.engine.execute_safe_ddl(
+                    "ALTER ALERT {full_name:i} RESUME",
+                    {
+                        "full_name": bp.full_name,
+                    },
+                )
+                result = ResolveResult.ALTER
+            elif suspended_for_alter:
+                self.engine.execute_safe_ddl(
+                    "ALTER ALERT {full_name:i} RESUME",
+                    {
+                        "full_name": bp.full_name,
+                    },
+                )
+        else:
+            if was_started and not suspended_for_alter:
+                self.engine.execute_safe_ddl(
+                    "ALTER ALERT {full_name:i} SUSPEND",
+                    {
+                        "full_name": bp.full_name,
+                    },
+                )
+                result = ResolveResult.ALTER
 
         return result
 

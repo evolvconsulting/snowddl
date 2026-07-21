@@ -84,6 +84,7 @@ class AlertBlueprint(SchemaObjectBlueprint):
     schedule: str
     condition: str
     action: str
+    enabled: bool = True
 
 
 class AuthenticationPolicyBlueprint(SchemaObjectBlueprint):
