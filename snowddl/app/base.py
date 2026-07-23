@@ -603,14 +603,22 @@ class BaseApp:
             "application": f"{self.application_name} {self.application_version}",
         }
 
-        # OIE patch (#7): set a session database so object bodies with two-part
-        # (SCHEMA.OBJECT) references resolve at CREATE time. SQL scalar UDFs
-        # validate referenced UDFs strictly at creation; without a current
-        # database a body ref like MDM.NORMALIZE_ORG_NAME fails "unknown
-        # user-defined function". Sourced from SNOWFLAKE_DATABASE env so the
-        # same CLI targets clone (SNOWFLAKE_DATABASE=OIE_SNOWDDL_CLONE) or prod
-        # (=OIE). No-op if unset (upstream behavior preserved).
-        if environ.get("SNOWFLAKE_DATABASE"):
+        # OIE patch (#9): session DB from target_db (supersedes #7).
+        # SQL scalar UDF bodies validate sibling refs (SCHEMA.OBJECT) strictly at
+        # CREATE time, so the session's current database must equal the CREATE
+        # target — for prod (OIE) AND rehearsal clones (OIE_*_REH). Patch #7 keyed
+        # this off the SNOWFLAKE_DATABASE env var, which the deploy workflow
+        # hardcoded to OIE; that mispointed a clone apply at prod (not clone-
+        # faithful). SingleDbApp knows the actual target (self.target_db, set in
+        # init_config before get_connection runs), so key the session DB off it.
+        # Set once at connect (not a mid-phase USE DATABASE — the engine shares
+        # one connection across a ThreadPoolExecutor, so a mid-run USE would race
+        # parallel workers). Env branch retained as a harmless fallback for any
+        # non-single-db / upstream caller (dead path for OIE, which only runs
+        # snowddl-singledb).
+        if getattr(self, "target_db", None) is not None:
+            options["database"] = str(self.target_db.database)
+        elif environ.get("SNOWFLAKE_DATABASE"):
             options["database"] = environ["SNOWFLAKE_DATABASE"]
 
         if self.args.get("authenticator") == "snowflake":
