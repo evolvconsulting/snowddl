@@ -12,6 +12,19 @@ backup_policy_json_schema = {
         "expire_after_days": {
             "type": "integer"
         },
+        "grants": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                },
+                # OIE patch (#10): minItems 0 -- an EMPTY list is the declaration that
+                # carries the point, "no role holds this privilege", so it must be
+                # expressible. Patch #8 used minItems 1 and could not say it.
+                "minItems": 0
+            }
+        },
         "comment": {
             "type": "string"
         }
@@ -30,6 +43,7 @@ class BackupPolicyParser(AbstractParser):
             full_name=SchemaObjectIdent(self.env_prefix, f.database, f.schema, f.name),
             schedule=f.params.get("schedule"),
             expire_after_days=f.params.get("expire_after_days"),
+            grants=f.params.get("grants"),
             comment=f.params.get("comment"),
         )
 

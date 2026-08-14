@@ -88,10 +88,20 @@ class AbstractResolver(ABC):
                     self.resolved_objects[full_name] = ResolveResult.SKIP
                     continue
 
+                # OIE patch (#10): dispatch through entry points rather than calling
+                # create_object / compare_object directly, so a subclass can wrap every
+                # create and compare in one place. AbstractSchemaObjectResolver uses this
+                # to reconcile object-level grants for every object type at once, instead
+                # of each of the ~30 resolvers repeating the call. Default behavior is
+                # unchanged: these entry points just call the abstract methods.
                 if full_name in self.existing_objects:
-                    tasks[full_name] = (self.compare_object, self.blueprints[full_name], self.existing_objects[full_name])
+                    tasks[full_name] = (
+                        self._compare_object_entry_point,
+                        self.blueprints[full_name],
+                        self.existing_objects[full_name],
+                    )
                 else:
-                    tasks[full_name] = (self.create_object, self.blueprints[full_name])
+                    tasks[full_name] = (self._create_object_entry_point, self.blueprints[full_name])
 
             self._process_tasks(tasks)
 
@@ -241,6 +251,18 @@ class AbstractResolver(ABC):
     @abstractmethod
     def get_existing_objects(self) -> Dict[str, Dict]:
         pass
+
+    def _create_object_entry_point(self, bp: AbstractBlueprint) -> ResolveResult:
+        # OIE patch (#10): overridable seam around create_object. Concrete, not abstract
+        # -- every resolver inherits this default and only AbstractSchemaObjectResolver
+        # overrides it. See _resolve_create_compare. (An @abstractmethod here makes every
+        # resolver in the package abstract and `plan` dies at startup; the unit tests
+        # stayed green through it, so test_every_resolver_is_still_instantiable exists.)
+        return self.create_object(bp)
+
+    def _compare_object_entry_point(self, bp: AbstractBlueprint, row: Dict) -> ResolveResult:
+        # OIE patch (#10): overridable seam around compare_object.
+        return self.compare_object(bp, row)
 
     @abstractmethod
     def create_object(self, bp: AbstractBlueprint) -> ResolveResult:

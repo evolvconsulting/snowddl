@@ -36,6 +36,19 @@ projection_policy_json_schema = {
             },
             "minItems": 1
         },
+        "grants": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                },
+                # OIE patch (#10): minItems 0 -- an EMPTY list is the declaration that
+                # carries the point, "no role holds this privilege", so it must be
+                # expressible. Patch #8 used minItems 1 and could not say it.
+                "minItems": 0
+            }
+        },
         "comment": {
             "type": "string"
         }
@@ -66,6 +79,7 @@ class ProjectionPolicyParser(AbstractParser):
             full_name=SchemaObjectIdent(self.env_prefix, f.database, f.schema, f.name),
             body=self.normalise_sql_text_param(f.params["body"]),
             references=references,
+            grants=f.params.get("grants"),
             comment=f.params.get("comment"),
         )
 

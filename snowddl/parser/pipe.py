@@ -61,6 +61,19 @@ pipe_json_schema = {
         "error_integration": {
             "type": "string"
         },
+        "grants": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                },
+                # OIE patch (#10): minItems 0 -- an EMPTY list is the declaration that
+                # carries the point, "no role holds this privilege", so it must be
+                # expressible. Patch #8 used minItems 1 and could not say it.
+                "minItems": 0
+            }
+        },
         "comment": {
             "type": "string"
         }
@@ -102,6 +115,7 @@ class PipeParser(AbstractParser):
             aws_sns_topic=f.params.get("aws_sns_topic"),
             integration=Ident(f.params["integration"]) if f.params.get("integration") else None,
             error_integration=Ident(f.params["error_integration"]) if f.params.get("error_integration") else None,
+            grants=f.params.get("grants"),
             comment=f.params.get("comment"),
         )
 

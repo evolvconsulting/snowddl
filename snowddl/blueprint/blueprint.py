@@ -59,6 +59,17 @@ class AbstractBlueprint(BaseModelWithConfig, ABC):
 
 class SchemaObjectBlueprint(AbstractBlueprint, ABC):
     full_name: SchemaObjectIdent
+    # OIE patch (#10): object-level grants, available to EVERY schema object type.
+    # {privilege: [role_name, ...]}, AUTHORITATIVE for each privilege named and inert for
+    # every other -- so an empty list means "no role holds this" and revokes whoever does.
+    # Reconciled centrally by AbstractSchemaObjectResolver; a type whose parser does not
+    # accept a `grants:` key simply never populates it.
+    #
+    # Supersedes the per-class copies patches #8 and #9 put on Function/Procedure/Table.
+    # Patch #8 was additive (it could not express an absence); this is not. Verified
+    # before the switch, 2026-08-13: all 62 procedure/function objects declaring grants
+    # held exactly their declared grantee live, so the change revokes nothing.
+    grants: Optional[Dict[str, List[str]]] = None
 
 
 class RoleBlueprint(AbstractBlueprint, DependsOnMixin):
@@ -262,9 +273,6 @@ class FunctionBlueprint(SchemaObjectBlueprint):
     handler: Optional[str] = None
     external_access_integrations: Optional[List[AccountObjectIdent]] = None
     secrets: Optional[Dict[str, SchemaObjectIdent]] = None
-    # OIE patch (#8): object-level grants re-applied on every CREATE OR REPLACE
-    # (functions cannot COPY GRANTS). {privilege: [role_name, ...]}.
-    grants: Optional[Dict[str, List[str]]] = None
 
 
 class HybridTableBlueprint(SchemaObjectBlueprint, DependsOnMixin):
@@ -364,9 +372,6 @@ class ProcedureBlueprint(SchemaObjectBlueprint):
     handler: Optional[str] = None
     external_access_integrations: Optional[List[AccountObjectIdent]] = None
     secrets: Optional[Dict[str, SchemaObjectIdent]] = None
-    # OIE patch (#8): object-level grants re-applied on every CREATE OR REPLACE
-    # (procedures/functions cannot COPY GRANTS). {privilege: [role_name, ...]}.
-    grants: Optional[Dict[str, List[str]]] = None
 
 
 class ProjectionPolicyBlueprint(SchemaObjectBlueprint):
@@ -472,14 +477,6 @@ class TableBlueprint(SchemaObjectBlueprint):
     retention_time: Optional[int] = None
     change_tracking: bool = False
     search_optimization: Union[bool, List[SearchOptimizationItem]] = False
-    # OIE patch (#9): object-level grants on tables. {privilege: [role_name, ...]}.
-    # AUTHORITATIVE for every privilege named here and for no other: the declared
-    # role list becomes the live grantee list, so an empty list means "no role holds
-    # this privilege" and REVOKEs whoever does. Unlike patch #8 on procedures, which
-    # is additive because its job is to self-heal grants that CREATE OR REPLACE
-    # dropped. Here the job is the opposite -- to make an undeclared grant visible
-    # and removable -- which additive semantics cannot express.
-    grants: Optional[Dict[str, List[str]]] = None
 
 
 class TagBlueprint(SchemaObjectBlueprint):

@@ -25,6 +25,19 @@ materialized_view_json_schema = {
         "is_secure": {
             "type": "boolean"
         },
+        "grants": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                },
+                # OIE patch (#10): minItems 0 -- an EMPTY list is the declaration that
+                # carries the point, "no role holds this privilege", so it must be
+                # expressible. Patch #8 used minItems 1 and could not say it.
+                "minItems": 0
+            }
+        },
         "comment": {
             "type": "string"
         }
@@ -56,6 +69,7 @@ class MaterializedViewParser(AbstractParser):
             columns=column_blueprints if column_blueprints else None,
             is_secure=f.params.get("is_secure", False),
             cluster_by=f.params.get("cluster_by"),
+            grants=f.params.get("grants"),
             comment=f.params.get("comment"),
         )
 

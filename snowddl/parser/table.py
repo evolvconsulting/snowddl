@@ -121,7 +121,7 @@ table_json_schema = {
             "items": {
                 "type": "string"
             },
-            "minItems": 1
+            "minItems": 0
         },
         "unique_keys": {
             "type": "array",
@@ -130,7 +130,7 @@ table_json_schema = {
                 "items": {
                     "type": "string"
                 },
-                "minItems": 1,
+                "minItems": 0,
             }
         },
         "foreign_keys": {
@@ -143,7 +143,7 @@ table_json_schema = {
                         "items": {
                             "type": "string"
                         },
-                        "minItems": 1
+                        "minItems": 0
                     },
                     "ref_table": {
                         "type": "string"
@@ -153,7 +153,7 @@ table_json_schema = {
                         "items": {
                             "type": "string"
                         },
-                        "minItems": 1
+                        "minItems": 0
                     }
                 },
                 "additionalProperties": False
@@ -184,7 +184,7 @@ table_json_schema = {
                     "items": {
                         "type": "string"
                     },
-                    "minItems": 1
+                    "minItems": 0
                 }
             },
             "required": ["policy_name"],
@@ -201,7 +201,7 @@ table_json_schema = {
                     "items": {
                         "type": "string"
                     },
-                    "minItems": 1
+                    "minItems": 0
                 },
             },
             "required": ["policy_name"],
@@ -220,7 +220,7 @@ table_json_schema = {
                         "items": {
                             "type": "string"
                         },
-                        "minItems": 1
+                        "minItems": 0
                     }
                 },
                 "required": ["policy_name", "columns"],
@@ -256,7 +256,7 @@ table_json_schema = {
                     "items": {
                         "type": "string"
                     },
-                    "minItems": 1
+                    "minItems": 0
                 },
             },
             "required": ["policy_name", "columns"],
