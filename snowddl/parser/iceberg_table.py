@@ -28,6 +28,19 @@ iceberg_table_json_schema = {
         "auto_refresh": {
             "type": "boolean"
         },
+        "grants": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                },
+                # OIE patch (#10): minItems 0 -- an EMPTY list is the declaration that
+                # carries the point, "no role holds this privilege", so it must be
+                # expressible. Patch #8 used minItems 1 and could not say it.
+                "minItems": 0
+            }
+        },
         "comment": {
             "type": "string"
         },
@@ -82,6 +95,7 @@ class IcebergTableParser(AbstractParser):
             base_location=f.params.get("base_location"),
             replace_invalid_characters=f.params.get("replace_invalid_characters", False),
             auto_refresh=f.params.get("auto_refresh", False),
+            grants=f.params.get("grants"),
             comment=f.params.get("comment"),
         )
 

@@ -45,6 +45,19 @@ view_json_schema = {
             },
             "minItems": 1
         },
+        "grants": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                },
+                # OIE patch (#10): minItems 0 -- an EMPTY list is the declaration that
+                # carries the point, "no role holds this privilege", so it must be
+                # expressible. Patch #8 used minItems 1 and could not say it.
+                "minItems": 0
+            }
+        },
         "comment": {
             "type": "string"
         },
@@ -168,6 +181,7 @@ class ViewParser(AbstractParser):
             depends_on=set(
                 build_schema_object_ident(self.env_prefix, v, f.database, f.schema) for v in f.params.get("depends_on", [])
             ),
+            grants=f.params.get("grants"),
             comment=f.params.get("comment"),
         )
 

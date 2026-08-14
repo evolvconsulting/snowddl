@@ -51,6 +51,19 @@ stage_json_schema = {
                 "type": ["array", "boolean", "number", "string"]
             }
         },
+        "grants": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                },
+                # OIE patch (#10): minItems 0 -- an EMPTY list is the declaration that
+                # carries the point, "no role holds this privilege", so it must be
+                # expressible. Patch #8 used minItems 1 and could not say it.
+                "minItems": 0
+            }
+        },
         "comment": {
             "type": "string"
         }
@@ -82,6 +95,7 @@ class StageParser(AbstractParser):
             file_format=build_schema_object_ident(self.env_prefix, f.params["file_format"], f.database, f.schema) if f.params.get("file_format") else None,
             copy_options=self.normalise_params_dict(f.params.get("copy_options")),
             upload_stage_files=stage_files_dir.is_dir(),
+            grants=f.params.get("grants"),
             comment=f.params.get("comment"),
         )
         # fmt: on

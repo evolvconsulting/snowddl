@@ -18,6 +18,19 @@ network_rule_json_schema = {
         "mode": {
             "type": "string"
         },
+        "grants": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                },
+                # OIE patch (#10): minItems 0 -- an EMPTY list is the declaration that
+                # carries the point, "no role holds this privilege", so it must be
+                # expressible. Patch #8 used minItems 1 and could not say it.
+                "minItems": 0
+            }
+        },
         "comment": {
             "type": "string"
         },
@@ -38,6 +51,7 @@ class NetworkRuleParser(AbstractParser):
             type=str(f.params["type"]).upper(),
             value_list=[str(v) for v in f.params.get("value_list", [])],
             mode=str(f.params["mode"]).upper(),
+            grants=f.params.get("grants"),
             comment=f.params.get("comment"),
         )
 

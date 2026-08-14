@@ -37,6 +37,19 @@ secret_json_schema = {
         "algorithm": {
             "type": "string"
         },
+        "grants": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                },
+                # OIE patch (#10): minItems 0 -- an EMPTY list is the declaration that
+                # carries the point, "no role holds this privilege", so it must be
+                # expressible. Patch #8 used minItems 1 and could not say it.
+                "minItems": 0
+            }
+        },
         "comment": {
             "type": "string"
         },
@@ -63,6 +76,7 @@ class SecretParser(AbstractParser):
             password=f.params.get("password"),
             secret_string=f.params.get("secret_string"),
             algorithm=f.params.get("algorithm"),
+            grants=f.params.get("grants"),
             comment=f.params.get("comment"),
         )
 

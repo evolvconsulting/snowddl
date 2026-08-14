@@ -100,7 +100,7 @@ function_json_schema = {
             "items": {
                 "type": "string"
             },
-            "minItems": 1
+            "minItems": 0
         },
         "handler": {
             "type": "string"
@@ -110,7 +110,7 @@ function_json_schema = {
             "items": {
                 "type": "string"
             },
-            "minItems": 1
+            "minItems": 0
         },
         "secrets": {
             "type": "object",
@@ -125,7 +125,7 @@ function_json_schema = {
                 "items": {
                     "type": "string"
                 },
-                "minItems": 1
+                "minItems": 0
             }
         },
         "comment": {

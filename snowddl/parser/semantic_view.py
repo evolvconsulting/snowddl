@@ -178,6 +178,19 @@ semantic_view_json_schema = {
             },
             "minItems": 1
         },
+        "grants": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                },
+                # OIE patch (#10): minItems 0 -- an EMPTY list is the declaration that
+                # carries the point, "no role holds this privilege", so it must be
+                # expressible. Patch #8 used minItems 1 and could not say it.
+                "minItems": 0
+            }
+        },
         "comment": {
             "type": "string"
         },
@@ -200,6 +213,7 @@ class SemanticViewParser(AbstractParser):
             facts=[self.build_semantic_view_expression(expr_def) for expr_def in f.params.get("facts", [])],
             dimensions=[self.build_semantic_view_expression(expr_def) for expr_def in f.params.get("dimensions", [])],
             metrics=[self.build_semantic_view_expression(expr_def) for expr_def in f.params.get("metrics", [])],
+            grants=f.params.get("grants"),
             comment=f.params.get("comment"),
         )
 

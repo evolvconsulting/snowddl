@@ -39,6 +39,19 @@ cortex_search_service_json_schema = {
         "text": {
             "type": "string"
         },
+        "grants": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                },
+                # OIE patch (#10): minItems 0 -- an EMPTY list is the declaration that
+                # carries the point, "no role holds this privilege", so it must be
+                # expressible. Patch #8 used minItems 1 and could not say it.
+                "minItems": 0
+            }
+        },
         "comment": {
             "type": "string"
         },
@@ -65,6 +78,7 @@ class CortexSearchServiceParser(AbstractParser):
             target_lag=f.params["target_lag"],
             refresh_mode=f.params.get("refresh_mode").upper() if f.params.get("refresh_mode") else None,
             text=self.normalise_sql_text_param(f.params["text"]),
+            grants=f.params.get("grants"),
             comment=f.params.get("comment"),
         )
 

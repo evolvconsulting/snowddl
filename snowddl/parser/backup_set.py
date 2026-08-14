@@ -22,6 +22,19 @@ backup_set_json_schema = {
         "backup_policy": {
             "type": "string"
         },
+        "grants": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                },
+                # OIE patch (#10): minItems 0 -- an EMPTY list is the declaration that
+                # carries the point, "no role holds this privilege", so it must be
+                # expressible. Patch #8 used minItems 1 and could not say it.
+                "minItems": 0
+            }
+        },
         "comment": {
             "type": "string"
         }
@@ -51,6 +64,7 @@ class BackupSetParser(AbstractParser):
             object_type=ObjectType[f.params["object_type"]],
             object_name=object_name,
             backup_policy=build_schema_object_ident(self.env_prefix, f.params["backup_policy"], f.database, f.schema) if f.params.get("backup_policy") else None,
+            grants=f.params.get("grants"),
             comment=f.params.get("comment"),
         )
 
