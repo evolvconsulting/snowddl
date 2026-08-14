@@ -482,3 +482,106 @@ def test_every_resolver_is_still_instantiable():
             still_abstract[name] = sorted(cls.__abstractmethods__)
 
     assert not still_abstract, f"concrete resolvers left abstract: {still_abstract}"
+
+
+# ---------------------------------------------------------------------------
+# Patch #11 -- a database whose name cannot be an identifier is skipped, not fatal
+# ---------------------------------------------------------------------------
+
+
+def _schema_cache_rows():
+    """SHOW DATABASES rows as SnowDDL sees them, measured on the OIE account
+    2026-08-14. The DROPPED_USER entries are what Snowflake leaves behind when a
+    user with a personal database is dropped: the login is an email, so the name
+    carries dots, and `kind` stays STANDARD -- which is why the existing
+    non-standard filter does not catch them."""
+    return [
+        {
+            "name": "DROPPED_USER$ADAM.SEATTS@EVOLVCONSULTING.COM_1786739347",
+            "kind": "STANDARD",
+            "owner": "ACCOUNTADMIN",
+            "comment": None,
+            "options": "",
+            "retention_time": "1",
+        },
+        {
+            "name": "OIE",
+            "kind": "STANDARD",
+            "owner": "OIE_ADMIN",
+            "comment": "the real one",
+            "options": "",
+            "retention_time": "1",
+        },
+        {
+            "name": "USER$OIE_BOOTSTRAP_ADMIN",
+            "kind": "PERSONAL DATABASE",
+            "owner": "ACCOUNTADMIN",
+            "comment": None,
+            "options": "",
+            "retention_time": "1",
+        },
+    ]
+
+
+class _StubEngine:
+    def __init__(self, include_databases):
+        from types import SimpleNamespace
+
+        self.rows = _schema_cache_rows()
+        self.skipped = []
+        self.config = SimpleNamespace(env_prefix="")
+        self.context = SimpleNamespace(current_role="OIE_ADMIN")
+        # singledb ALWAYS sets both of these (SingleDbApp.init_settings), which is
+        # why the ownership filter never runs and every visible STANDARD database
+        # reaches the identifier construction.
+        self.settings = SimpleNamespace(ignore_ownership=True, include_databases=include_databases)
+        self.logger = SimpleNamespace(debug=lambda msg: self.skipped.append(msg))
+        self.executor = SimpleNamespace(map=lambda fn, it: [])
+
+    def execute_meta(self, sql, params=None):
+        return self.rows
+
+
+def test_an_unparseable_database_name_is_skipped_not_fatal():
+    from snowddl.blueprint import Ident
+    from snowddl.cache.schema_cache import SchemaCache
+
+    engine = _StubEngine([Ident("OIE")])
+    cache = SchemaCache(engine)
+
+    assert list(cache.databases) == ["OIE"], (
+        "the target database must still be found; a dropped-user database must not be"
+    )
+    assert any("DROPPED_USER$" in m for m in engine.skipped), (
+        "the skip must be logged -- a database vanishing from SnowDDL's view with no "
+        "trace reads as 'nothing to do'"
+    )
+
+
+def test_the_stub_reproduces_the_original_crash():
+    # Non-vacuity. Without the try/except the same rows raise ValueError before any
+    # planning starts, which is the defect: one deprovisioned user broke `plan` and
+    # `apply` outright for any identity that could see the leftover database.
+    import pytest
+
+    from snowddl.blueprint import Ident
+
+    with pytest.raises(ValueError, match=r"Character \[\.\] is not allowed"):
+        Ident("DROPPED_USER$ADAM.SEATTS@EVOLVCONSULTING.COM_1786739347")
+
+
+def test_an_empty_include_list_also_skips_it():
+    # The pre-patch line short-circuited on an empty include_databases, so the name
+    # was never parsed -- and the database was then treated as MANAGED, which in
+    # multi-db mode makes an undeclared DROPPED_USER database a DROP candidate.
+    # Skipping unconditionally is the safer semantic, not just the non-crashing one.
+    from snowddl.cache.schema_cache import SchemaCache
+
+    engine = _StubEngine([])
+    cache = SchemaCache(engine)
+
+    assert "OIE" in cache.databases
+    assert not [d for d in cache.databases if "." in d], (
+        "an unparseable database name must never enter the managed set, even with no "
+        "include filter -- SnowDDL cannot address an object it cannot name"
+    )

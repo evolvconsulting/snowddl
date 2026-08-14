@@ -41,8 +41,34 @@ class SchemaCache:
             if r["kind"] != "STANDARD":
                 continue
 
+            # OIE patch (#11): skip a database whose name is not a valid identifier.
+            #
+            # Snowflake renames a dropped user's personal database to
+            # DROPPED_USER$<login>_<epoch>, and the login is an email address, so the
+            # name contains dots -- while `kind` stays STANDARD, which is why the check
+            # above does not catch it. Ident() rejects a dot, and this line raised
+            # ValueError before any planning began, so a single deprovisioned user broke
+            # `plan` and `apply` outright for any identity that can SEE that database
+            # (measured 2026-08-14: five users dropped in 34 minutes; an ACCOUNTADMIN
+            # secondary role is enough to see them, a plain OIE_ADMIN is not).
+            #
+            # Skipping is exactly right rather than merely defensive: a name SnowDDL
+            # cannot parse can never appear in include_databases, so the branch below
+            # would always have continued anyway. The only behaviour that changes is
+            # that it now continues instead of crashing.
+            # Logged, not silent: skipping is correct, but a database vanishing from
+            # SnowDDL's view with no trace is how a real config problem gets read as
+            # "nothing to do".
+            try:
+                database_ident = Ident(r["name"])
+            except ValueError:
+                self.engine.logger.debug(
+                    f"Skipped database [{r['name']}]: name is not a valid SnowDDL identifier"
+                )
+                continue
+
             # Skip databases not listed in settings explicitly
-            if self.engine.settings.include_databases and Ident(r["name"]) not in self.engine.settings.include_databases:
+            if self.engine.settings.include_databases and database_ident not in self.engine.settings.include_databases:
                 continue
 
             self.databases[r["name"]] = {
