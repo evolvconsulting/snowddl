@@ -472,6 +472,14 @@ class TableBlueprint(SchemaObjectBlueprint):
     retention_time: Optional[int] = None
     change_tracking: bool = False
     search_optimization: Union[bool, List[SearchOptimizationItem]] = False
+    # OIE patch (#9): object-level grants on tables. {privilege: [role_name, ...]}.
+    # AUTHORITATIVE for every privilege named here and for no other: the declared
+    # role list becomes the live grantee list, so an empty list means "no role holds
+    # this privilege" and REVOKEs whoever does. Unlike patch #8 on procedures, which
+    # is additive because its job is to self-heal grants that CREATE OR REPLACE
+    # dropped. Here the job is the opposite -- to make an undeclared grant visible
+    # and removable -- which additive semantics cannot express.
+    grants: Optional[Dict[str, List[str]]] = None
 
 
 class TagBlueprint(SchemaObjectBlueprint):
