@@ -2,6 +2,7 @@ from itertools import islice
 from re import compile
 
 from snowddl.blueprint import (
+    AccountObjectIdent,
     Ident,
     TableBlueprint,
     TableColumn,
@@ -66,6 +67,11 @@ class TableResolver(AbstractSchemaObjectResolver):
         self.engine.execute_safe_ddl(query)
 
         self._create_search_optimization(bp)
+        # is_new: a table that does not exist yet has no grants to read. Under
+        # `plan` the CREATE is not executed at all, so SHOW GRANTS would run
+        # against a missing object and abort the whole plan on the one case this
+        # feature is most likely to be introduced with -- a new table.
+        self._apply_object_grants(bp, is_new=True)
 
         return ResolveResult.CREATE
 
@@ -367,7 +373,96 @@ class TableResolver(AbstractSchemaObjectResolver):
             if self._compare_search_optimization(bp, row["search_optimization"]) and result == ResolveResult.NOCHANGE:
                 result = ResolveResult.ALTER
 
+        # OIE patch (#9): grants are reconciled on EVERY pass, not only when the
+        # table DDL changed. A hand-issued grant leaves the column list untouched,
+        # so a check that only ran on REPLACE/ALTER would never see the drift it
+        # exists to catch. Reported as ALTER so `plan --detailed-exitcode` is
+        # non-zero and the conformance gate goes red.
+        if self._apply_object_grants(bp) and result == ResolveResult.NOCHANGE:
+            result = ResolveResult.ALTER
+
         return result
+
+    def _apply_object_grants(self, bp: TableBlueprint, is_new: bool = False):
+        # OIE patch (#9): reconcile object-level grants on a table against config.
+        # Returns True if any GRANT or REVOKE was issued.
+        #
+        # AUTHORITATIVE, BUT ONLY FOR THE PRIVILEGES NAMED IN CONFIG. For each
+        # privilege that appears as a key, the declared role list becomes the live
+        # grantee list -- missing roles are granted, extra roles are revoked, and an
+        # empty list means nobody holds it. A privilege that does NOT appear as a key
+        # is not touched at all.
+        #
+        # That scoping is what makes the feature usable in a repo where Terraform
+        # owns the broad grants. OIE grants SELECT to six roles through schema-wide
+        # ALL + FUTURE resources; if this reconciled the whole grant set, it would
+        # revoke those on every apply and Terraform would re-grant them on every
+        # terraform apply -- a permanent ping-pong. Naming only INSERT/UPDATE/DELETE
+        # leaves the SELECT tier alone by construction.
+        #
+        # OWNERSHIP is skipped (it is transferred, not granted) and non-ROLE grantees
+        # are skipped (user grants are SCIM's, not SnowDDL's) -- same exclusions as
+        # patch #8.
+        if bp.grants is None:
+            return False
+
+        live_grantees = {}
+
+        if not is_new:
+            cur = self.engine.execute_meta(
+                "SHOW GRANTS ON TABLE {full_name:i}",
+                {
+                    "full_name": bp.full_name,
+                },
+            )
+
+            for r in cur:
+                if r["granted_to"] != "ROLE" or r["privilege"] == "OWNERSHIP":
+                    continue
+
+                live_grantees.setdefault(r["privilege"], set()).add(r["grantee_name"])
+
+        is_changed = False
+
+        for privilege, roles in bp.grants.items():
+            privilege = str(privilege).upper()
+
+            # Declared names are bare; live names carry the env prefix. Compare in
+            # the live namespace, and keep the bare name so the GRANT re-prefixes
+            # exactly once -- re-wrapping a prefixed name would double the prefix.
+            desired = {str(AccountObjectIdent(self.config.env_prefix, role)): role for role in roles}
+            current = live_grantees.get(privilege, set())
+
+            for full_role_name in sorted(set(desired) - current):
+                self.engine.execute_safe_ddl(
+                    "GRANT {privilege:r} ON TABLE {full_name:i} TO ROLE {role:i}",
+                    {
+                        "privilege": privilege,
+                        "full_name": bp.full_name,
+                        "role": AccountObjectIdent(self.config.env_prefix, desired[full_role_name]),
+                    },
+                )
+
+                is_changed = True
+
+            # REVOKE is the destructive direction, so it goes through unsafe DDL and
+            # is gated by --apply-unsafe, like every other removal in SnowDDL. It is
+            # still PRINTED by plan either way, which is what the conformance gate
+            # reads -- so drift is visible on a run that is not permitted to fix it.
+            for full_role_name in sorted(current - set(desired)):
+                self.engine.execute_unsafe_ddl(
+                    "REVOKE {privilege:r} ON TABLE {full_name:i} FROM ROLE {role:i}",
+                    {
+                        "privilege": privilege,
+                        "full_name": bp.full_name,
+                        # Already env-prefixed by Snowflake; do not prefix again.
+                        "role": AccountObjectIdent("", full_role_name),
+                    },
+                )
+
+                is_changed = True
+
+        return is_changed
 
     def drop_object(self, row: dict):
         self.engine.execute_unsafe_ddl(

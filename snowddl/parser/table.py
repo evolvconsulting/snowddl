@@ -100,6 +100,19 @@ table_json_schema = {
                 }
             ]
         },
+        "grants": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                },
+                # OIE patch (#9): minItems 0, unlike the procedure/function schema.
+                # An EMPTY list is the declaration that carries the whole point --
+                # "no role holds this privilege" -- so it must be expressible.
+                "minItems": 0
+            }
+        },
         "comment": {
             "type": "string"
         },
@@ -314,6 +327,7 @@ class TableParser(AbstractParser):
             retention_time=f.params.get("retention_time", combined_params[f.database][f.schema].get("retention_time", None)),
             change_tracking=f.params.get("change_tracking", False),
             search_optimization=self.get_search_optimization(f.params.get("search_optimization", False)),
+            grants=f.params.get("grants"),
             comment=f.params.get("comment"),
         )
 
