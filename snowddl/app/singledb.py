@@ -245,6 +245,18 @@ class SingleDbApp(BaseApp):
             help="Clone from another environment with different env_prefix",
         )
 
+        # OIE patch (apply-revision-guard): deliberate, recorded override of a refusal.
+        # Takes a REASON rather than being a bare flag -- the reason is written to
+        # OBSERVABILITY.SNOWDDL_APPLIED_REVISION.OVERRIDE_REASON and is the only thing
+        # separating a considered overwrite from an accidental one when someone reads
+        # the table later.
+        parser.add_argument(
+            "--allow-revision-override",
+            help="Overwrite objects whose recorded revision is not an ancestor of this one. Takes a reason, which is recorded.",
+            metavar="REASON",
+            default=None,
+        )
+
         # Detailed exitcode
         parser.add_argument(
             "--detailed-exitcode",
@@ -364,6 +376,10 @@ class SingleDbApp(BaseApp):
                         resolver.resolve()
 
                     error_count += len(resolver.errors)
+
+            # OIE patch (apply-revision-guard): one INSERT for every object this apply
+            # wrote, before the connection closes.
+            engine.revision_guard.flush()
 
             engine.connection.close()
 

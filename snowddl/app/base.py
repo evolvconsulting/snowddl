@@ -17,6 +17,7 @@ from snowddl.config import SnowDDLConfig
 from snowddl.engine import SnowDDLEngine
 from snowddl.parser import default_parse_sequence, DirectoryScanner, PermissionModelParser, PlaceholderParser
 from snowddl.resolver import default_resolve_sequence, default_destroy_sequence
+from snowddl.revision_guard import RevisionGuard
 from snowddl.settings import SnowDDLSettings
 from snowddl.validator import default_validate_sequence
 from snowddl.version import __version__
@@ -298,6 +299,18 @@ class BaseApp:
         parser.add_argument(
             "--clone-source-env-prefix",
             help="Clone from another environment with different env_prefix",
+        )
+
+        # OIE patch (apply-revision-guard): deliberate, recorded override of a refusal.
+        # Takes a REASON rather than being a bare flag -- the reason is written to
+        # OBSERVABILITY.SNOWDDL_APPLIED_REVISION.OVERRIDE_REASON and is the only thing
+        # separating a considered overwrite from an accidental one when someone reads
+        # the table later.
+        parser.add_argument(
+            "--allow-revision-override",
+            help="Overwrite objects whose recorded revision is not an ancestor of this one. Takes a reason, which is recorded.",
+            metavar="REASON",
+            default=None,
         )
 
         # Detailed exitcode
@@ -592,6 +605,21 @@ class BaseApp:
         with self.measure_elapsed_time("GetEngine"):
             engine = SnowDDLEngine(self.get_connection(), self.config, self.settings)
 
+        # OIE patch (apply-revision-guard). Attached here rather than inside
+        # SnowDDLEngine because only the app knows the config PATH (the git working copy
+        # whose revision is being applied) and the TARGET database. One query; it disables
+        # itself, with a warning, if the target has no OBSERVABILITY.V_SNOWDDL_OBJECT_REVISION
+        # -- which is how a fork user who never created the table is unaffected, and how the
+        # table itself can ship one deploy ahead of the pin that reads it.
+        target_db = getattr(self, "target_db", None)
+        engine.revision_guard = RevisionGuard(
+            engine,
+            self.config_path,
+            str(target_db.database) if target_db is not None else None,
+            self.args.get("allow_revision_override"),
+        )
+        engine.revision_guard.load()
+
         return engine
 
     def get_connection(self):
@@ -707,6 +735,11 @@ class BaseApp:
                         resolver.resolve()
 
                     total_error_count += len(resolver.errors)
+
+            # OIE patch (apply-revision-guard): one INSERT for every object this apply
+            # wrote. Before connection.close(), and outside the destroy path -- a destroy
+            # removes objects rather than moving their bodies.
+            engine.revision_guard.flush()
 
             engine.connection.close()
 

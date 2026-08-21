@@ -22,13 +22,25 @@ class AbstractSchemaObjectResolver(AbstractResolver):
         # OIE patch (#10): the object does not exist yet, so there are no live grants to
         # read -- and under `plan` the CREATE never executes, so SHOW GRANTS would run
         # against a missing object and abort the whole plan.
+        #
+        # OIE patch (apply-revision-guard): THIS OVERRIDE DOES NOT CALL super(), so the
+        # base class's guard call does not reach any schema object -- which is nearly
+        # every object there is. The call is repeated here on purpose, and
+        # test_every_entry_point_override_calls_the_revision_guard asserts that any
+        # FUTURE override does the same. That test is the whole reason this duplication
+        # is safe.
+        self._revision_guard_check(bp)
         result = self.create_object(bp)
+        self._revision_guard_record(bp, result)
         self._reconcile_object_grants(bp, object_exists=False)
 
         return result
 
     def _compare_object_entry_point(self, bp: AbstractBlueprint, row: Dict) -> ResolveResult:
+        # OIE patch (apply-revision-guard): see _create_object_entry_point above.
+        self._revision_guard_check(bp)
         result = self.compare_object(bp, row)
+        self._revision_guard_record(bp, result)
 
         # Reconciled AFTER compare_object, deliberately. For the object types whose
         # CREATE OR REPLACE cannot COPY GRANTS (procedures, functions, streams, tasks),

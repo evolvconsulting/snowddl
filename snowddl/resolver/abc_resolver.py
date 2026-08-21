@@ -258,11 +258,39 @@ class AbstractResolver(ABC):
         # overrides it. See _resolve_create_compare. (An @abstractmethod here makes every
         # resolver in the package abstract and `plan` dies at startup; the unit tests
         # stayed green through it, so test_every_resolver_is_still_instantiable exists.)
-        return self.create_object(bp)
+        #
+        # OIE patch (apply-revision-guard): the guard runs FIRST, so a refusal raises
+        # before any DDL is issued for this object. _process_tasks turns that into
+        # ResolveResult.ERROR for this object alone -- every sibling still proceeds.
+        self._revision_guard_check(bp)
+        result = self.create_object(bp)
+        self._revision_guard_record(bp, result)
+        return result
 
     def _compare_object_entry_point(self, bp: AbstractBlueprint, row: Dict) -> ResolveResult:
         # OIE patch (#10): overridable seam around compare_object.
-        return self.compare_object(bp, row)
+        # OIE patch (apply-revision-guard): see _create_object_entry_point.
+        self._revision_guard_check(bp)
+        result = self.compare_object(bp, row)
+        self._revision_guard_record(bp, result)
+        return result
+
+    def _revision_guard(self):
+        # getattr, not an attribute access: an engine constructed directly in a unit test
+        # has no guard, and the guard must never be the reason a test cannot build one.
+        return getattr(self.engine, "revision_guard", None)
+
+    def _revision_guard_check(self, bp: AbstractBlueprint):
+        guard = self._revision_guard()
+        if guard is not None:
+            guard.check(self.object_type.name, str(bp.full_name))
+
+    def _revision_guard_record(self, bp: AbstractBlueprint, result: ResolveResult):
+        # Only CREATE and REPLACE reach the table -- a NOCHANGE resolve did not change the
+        # body, and stamping it would launder a stale body into looking current.
+        guard = self._revision_guard()
+        if guard is not None:
+            guard.record(self.object_type.name, str(bp.full_name), result.value)
 
     @abstractmethod
     def create_object(self, bp: AbstractBlueprint) -> ResolveResult:
