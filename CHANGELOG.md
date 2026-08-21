@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.67.5-oie.12] - 2026-08-20 — apply-revision guard (OIE-819 / D-333)
+
+- An apply now refuses to write an object whose recorded revision is not an **ancestor** of the
+  revision being applied. Several clones of a config repo can share one Snowflake identity, and an
+  apply from a stale clone silently overwrote a newer clone's work and exited 0 with a clean plan
+  of its own. Objects are overwritten, not dropped, so every existence check kept passing and only
+  the bodies moved backwards: measured on the OIE account, 30 revert-and-restore triples across 15
+  objects in 30 days, production carrying the reverted body 5 minutes to 46 hours.
+- New module `snowddl/revision_guard.py`. New CLI option `--allow-revision-override REASON` —
+  takes a reason, not a bare flag, and the reason is recorded.
+- The guard fires from the `_create_object_entry_point` / `_compare_object_entry_point` seam added
+  by patch #10. **The calls live in BOTH `AbstractResolver` and `AbstractSchemaObjectResolver`**,
+  because the subclass overrides them without calling `super()` and nearly every managed object is
+  a schema object. `test_every_entry_point_override_calls_the_revision_guard` holds that.
+- `plan` never refuses: the verdict is computed and logged, so a pre-apply plan shows what an apply
+  would refuse without red-lining a conformance gate.
+- Self-disabling. Without `OBSERVABILITY.V_SNOWDDL_OBJECT_REVISION` in the target database the guard
+  warns and behaves exactly as before, so a fork user who has not created it is unaffected.
+- Cost is two round trips per apply — one read at startup, one insert at the end — independent of
+  the number of objects.
+- **Labelled by name, never by number.** Patch `#9` was applied twice by two different changes and
+  the second silently reverted the first for about four weeks.
+
 ## [0.67.5] - 206-07-07
 
 - Added workaround for Snowflake-managed `SNOWSERVICE-*` integrations (auto-created for Snowpark Container Services / Cortex features) appearing as "does not conform to SnowDDL standards" warnings in `SHOW GRANTS` output.
