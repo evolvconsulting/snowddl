@@ -4,6 +4,25 @@
 [![Getting Started](https://github.com/littleK0i/SnowDDL/actions/workflows/getting_started.yml/badge.svg)](https://github.com/littleK0i/SnowDDL/actions/workflows/getting_started.yml)
 [![Pytest](https://github.com/littleK0i/SnowDDL/actions/workflows/pytest.yml/badge.svg)](https://github.com/littleK0i/SnowDDL/actions/workflows/pytest.yml)
 
+---
+
+## About this fork
+
+`evolvconsulting/snowddl` is evolv Consulting's fork of upstream SnowDDL. It carries patches on top
+of upstream `0.67.5` and is consumed by pinning a tag, never a branch.
+
+**Tag scheme.** Releases are tagged `0.67.5-evolv.N`. This supersedes the earlier `0.67.5-oie.N`
+scheme, which stopped at `0.67.5-oie.12` — there is no `oie.13`. The old tags are left in place so
+existing pins keep resolving; move to `evolv.N` at your next bump. The rename is cosmetic: the fork
+is shared across projects, and the old name implied it belonged to one of them.
+
+**CI.** `fork_tests.yml` runs this fork's own regression tests on every push and pull request. They
+are pure-unit and need no credentials. Upstream's `Pytest` and `Getting Started` workflows require a
+live Snowflake account — `test/run_test_full.sh` issues `destroy` then `apply` — so they are
+`workflow_dispatch` only here, and their badges above describe upstream, not this fork.
+
+---
+
 SnowDDL is a [declarative-style](https://www.snowflake.com/blog/embracing-agile-software-delivery-and-devops-with-snowflake/) tool for object management automation in [Snowflake](http://snowflake.com).
 
 It is not intended to replace other tools entirely, but to provide an alternative approach focused on practical data engineering challenges.
