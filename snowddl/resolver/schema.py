@@ -250,7 +250,17 @@ class SchemaResolver(AbstractResolver):
             result = ResolveResult.ALTER
 
         if bp.comment != row["comment"]:
-            self.engine.execute_unsafe_ddl(
+            # OIE fork patch: a SCHEMA comment change is non-destructive metadata, so
+            # it runs as SAFE DDL — NOT execute_unsafe_ddl (upstream). Under
+            # execute_unsafe_ddl the ALTER is only _suggest()ed (never executed) on a
+            # normal `apply` (apply_unsafe=false), so a config-vs-prod comment drift can
+            # NEVER converge without --apply-unsafe: the deploy's post-apply completeness
+            # plan re-emits `Resolved SCHEMA [...]: ALTER` forever and exit-2's the gate,
+            # even though nothing destructive is pending (observed: OIE.OBSERVABILITY
+            # OIE-126->OIE-127 comment drift, snowddl-deploy #30061474705). A comment is
+            # never data-destructive, so gating it behind --apply-unsafe is wrong; make it
+            # safe so `apply` converges it like any other metadata change.
+            self.engine.execute_safe_ddl(
                 "ALTER SCHEMA {full_name:i} SET COMMENT = {comment}",
                 {
                     "full_name": bp.full_name,

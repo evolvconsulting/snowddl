@@ -1,11 +1,11 @@
 name: Getting Started
 
+# Requires a live Snowflake account: the SNOWFLAKE_ACCOUNT and
+# SNOWFLAKE_PRIVATE_KEY secrets, which this fork does not carry, and
+# test/run_test_full.sh issues `destroy` then `apply` against whatever
+# account it is pointed at. Manual dispatch only in the evolv fork -- see
+# fork_tests.yml for the offline suite that runs on every push.
 on:
-  push:
-    paths:
-      - "**.py"
-      - "**.yml"
-      - "**.yaml"
   workflow_dispatch:
 
 concurrency:
