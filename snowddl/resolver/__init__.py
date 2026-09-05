@@ -84,7 +84,6 @@ default_resolve_sequence = [
     StageResolver,
     StageFileResolver,
     SequenceResolver,
-    FunctionResolver,
     ExternalFunctionResolver,
     ProcedureResolver,
     CloneTableResolver,
@@ -92,6 +91,13 @@ default_resolve_sequence = [
     EventTableResolver,
     HybridTableResolver,
     IcebergTableResolver,
+    # evolv patch: a SQL UDF resolves its table references at CREATE time, so
+    # FunctionResolver must run after the base tables exist -- upstream ran it before
+    # them and a UDF over a not-yet-created table failed with 2003 42S02. It stays
+    # ahead of dynamic tables, materialized views and views, which can all select a
+    # UDF. A depends_on declaration could not express this: batching is per resolver.
+    # Neither destroy sequence names FunctionResolver, so teardown is unaffected.
+    FunctionResolver,
     DynamicTableResolver,
     ExternalTableResolver,
     PrimaryKeyResolver,
@@ -166,7 +172,6 @@ singledb_resolve_sequence = [
     StageResolver,
     StageFileResolver,
     SequenceResolver,
-    FunctionResolver,
     ExternalFunctionResolver,
     ProcedureResolver,
     CloneTableResolver,
@@ -174,6 +179,13 @@ singledb_resolve_sequence = [
     EventTableResolver,
     HybridTableResolver,
     IcebergTableResolver,
+    # evolv patch: a SQL UDF resolves its table references at CREATE time, so
+    # FunctionResolver must run after the base tables exist -- upstream ran it before
+    # them and a UDF over a not-yet-created table failed with 2003 42S02. It stays
+    # ahead of dynamic tables, materialized views and views, which can all select a
+    # UDF. A depends_on declaration could not express this: batching is per resolver.
+    # Neither destroy sequence names FunctionResolver, so teardown is unaffected.
+    FunctionResolver,
     DynamicTableResolver,
     ExternalTableResolver,
     PrimaryKeyResolver,

@@ -36,4 +36,4 @@ jobs:
         run: pip install -e . pytest jsonschema
 
       - name: Run fork patch tests
-        run: pytest test_oie_fork_patches.py test_oie_revision_guard.py -q
+        run: pytest test_evolv_fork_patches.py test_oie_fork_patches.py test_oie_revision_guard.py -q

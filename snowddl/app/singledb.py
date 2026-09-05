@@ -322,28 +322,51 @@ class SingleDbApp(BaseApp):
     def convert_blueprint(self, bp: AbstractBlueprint):
         converted_bp = bp.model_copy(deep=True)
 
-        for field_name, field_value in converted_bp:
-            self.convert_object_recursive(getattr(converted_bp, field_name))
+        self.convert_object_recursive(converted_bp)
 
         return converted_bp
 
     def convert_object_recursive(self, obj):
+        # evolv patch: returns the converted object, which the container branches below
+        # write back. Idents are still remapped in place -- the write-back exists for the
+        # `set` branch alone, which cannot be.
         if isinstance(obj, BaseModel):
-            for field_name, field_value in obj:
-                self.convert_object_recursive(getattr(obj, field_name))
+            for field_name in list(obj.__dict__):
+                self._convert_and_reassign(obj, field_name, getattr(obj, field_name))
 
         if isinstance(obj, list):
-            for item in obj:
-                self.convert_object_recursive(item)
+            for index, item in enumerate(obj):
+                converted = self.convert_object_recursive(item)
+
+                if converted is not item:
+                    obj[index] = converted
 
         if isinstance(obj, dict):
-            for item in obj.values():
-                self.convert_object_recursive(item)
+            for key, item in list(obj.items()):
+                converted = self.convert_object_recursive(item)
+
+                if converted is not item:
+                    obj[key] = converted
+
+        # evolv patch: `depends_on` is a Set[AbstractIdent], and an ident hashes on
+        # str(self), which includes the database. Remapping an element in place inside a
+        # live set leaves it filed under its old hash -- `in` misses it and the set is
+        # silently broken. Rebuild instead, and let the caller store the new set.
+        if isinstance(obj, (set, frozenset)):
+            return type(obj)(self.convert_object_recursive(item) for item in obj)
 
         if isinstance(obj, (DatabaseIdent, SchemaIdent, SchemaObjectIdent)):
             obj.database = self.target_db.database
 
         return obj
+
+    def _convert_and_reassign(self, model: BaseModel, field_name: str, field_value):
+        converted = self.convert_object_recursive(field_value)
+
+        # Only a rebuilt set is ever a different object. Skipping the assignment
+        # otherwise keeps every other field clear of pydantic's validate_assignment.
+        if converted is not field_value:
+            setattr(model, field_name, converted)
 
     def init_settings(self):
         settings = super().init_settings()
