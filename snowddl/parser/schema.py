@@ -20,6 +20,9 @@ schema_json_schema = {
         "is_sandbox": {
             "type": "boolean"
         },
+        "is_unmanaged": {
+            "type": "boolean"
+        },
         "is_transient": {
             "type": "boolean"
         },
@@ -133,6 +136,7 @@ class SchemaParser(AbstractParser):
                     "is_transient": database_params.get("is_transient", False) or schema_params.get("is_transient", False),
                     "retention_time": schema_params.get("retention_time"),
                     "is_sandbox": schema_params.get("is_sandbox", database_params.get("is_sandbox", False)),
+                    "is_unmanaged": schema_params.get("is_unmanaged", database_params.get("is_unmanaged", False)),
                     "external_volume": schema_params.get("external_volume", database_params.get("external_volume")),
                     "catalog": schema_params.get("catalog", database_params.get("catalog")),
                     "catalog_sync": schema_params.get("catalog_sync", database_params.get("catalog_sync")),
@@ -148,6 +152,7 @@ class SchemaParser(AbstractParser):
                     full_name=SchemaIdent(self.env_prefix, database_name, schema_name),
                     permission_model=schema_permission_model_name,
                     is_sandbox=combined_params.get("is_sandbox", False),
+                    is_unmanaged=combined_params.get("is_unmanaged", False),
                     is_transient=combined_params.get("is_transient", False),
                     retention_time=combined_params.get("retention_time", None),
                     external_volume=Ident(combined_params.get("external_volume")) if combined_params.get("external_volume") else None,

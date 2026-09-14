@@ -162,14 +162,17 @@ class AbstractSchemaObjectResolver(AbstractResolver):
         pass
 
     def _is_unmanaged_blueprint(self, full_name: str) -> bool:
-        # OIE fork (D-218): skip create/compare of any schema object whose parent
-        # schema is flagged is_sandbox (recognize-but-not-managed). Mirrors the
-        # existing is_sandbox drop-skip below, extending it to reconciliation so a
+        # D-218, re-keyed by ADR-005: skip create/compare of any schema object whose
+        # parent schema is flagged is_unmanaged (recognize-but-not-managed), so a
         # declared child in another tier's schema (e.g. OPS.SP_PROVISION_REHEARSAL_CLONE)
         # is never CREATE-OR-REPLACE'd by a role that does not own OPS.
+        #
+        # The is_sandbox drop-skip in _resolve_drop below is deliberately NOT this flag.
+        # A schema wanting "never drop what I did not declare" while still deploying its
+        # own declared objects carries is_sandbox alone; one wanting both carries both.
         schema_full_name = ".".join(full_name.split(".")[:2])
         schema_bp = self.config.get_blueprints_by_type(SchemaBlueprint).get(schema_full_name)
-        return bool(schema_bp is not None and getattr(schema_bp, "is_sandbox", False))
+        return bool(schema_bp is not None and getattr(schema_bp, "is_unmanaged", False))
 
     def _resolve_drop(self):
         tasks = {}

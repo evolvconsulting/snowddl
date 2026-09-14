@@ -190,3 +190,134 @@ def test_teardown_is_untouched():
     # FunctionResolver, so moving it cannot reorder a drop.
     assert FunctionResolver not in default_destroy_sequence
     assert FunctionResolver not in singledb_destroy_sequence
+
+
+# --- ADR-005: is_unmanaged split out of is_sandbox ---------------------------
+#
+# One key carried two behaviours. D-218 extended is_sandbox from "never drop what
+# I did not declare" to also mean "recognize but do not manage", and OIE's five
+# schemas need both. Catalyst needs the first alone and could not have it: a
+# GOLDEN_* table declared under a sandboxed MDM_SERVING parsed, validated and
+# blueprinted, then was skipped on every apply, silently. PROBE-ADR002 measured
+# exactly that.
+#
+# After this patch the drop-skip stays on is_sandbox and the two skip-predicates
+# read is_unmanaged. A schema needing both carries both. These tests pin the
+# split: without them the next upstream move re-keys a predicate by accident and
+# nothing fails until a deploy does.
+
+import jsonschema
+import pytest
+
+from snowddl.blueprint import SchemaBlueprint, SchemaIdent
+from snowddl.parser.database import database_json_schema
+from snowddl.parser.schema import schema_json_schema
+from snowddl.resolver.abc_schema_object_resolver import AbstractSchemaObjectResolver
+from snowddl.resolver.schema import SchemaResolver
+
+
+def _schema_bp(name, **flags):
+    return SchemaBlueprint(full_name=SchemaIdent("", "DB", name), **flags)
+
+
+class _ConfigStub:
+    def __init__(self, blueprints):
+        self._blueprints = blueprints
+
+    def get_blueprints_by_type(self, _cls):
+        return self._blueprints
+
+
+class _ConcreteObjectResolver(AbstractSchemaObjectResolver):
+    """Smallest concrete subclass. The abstract methods are never called -- only
+    the inherited predicate is under test -- but the class cannot be built
+    without them."""
+
+    def get_object_type(self):  # pragma: no cover - never called
+        raise NotImplementedError
+
+    def get_blueprints(self):  # pragma: no cover - never called
+        raise NotImplementedError
+
+    def get_existing_objects_in_schema(self, schema):  # pragma: no cover
+        raise NotImplementedError
+
+    def create_object(self, bp):  # pragma: no cover - never called
+        raise NotImplementedError
+
+    def compare_object(self, bp, row):  # pragma: no cover - never called
+        raise NotImplementedError
+
+    def drop_object(self, row):  # pragma: no cover - never called
+        raise NotImplementedError
+
+
+def _object_predicate(schema_bp):
+    """`AbstractSchemaObjectResolver._is_unmanaged_blueprint` over one schema."""
+    resolver = _ConcreteObjectResolver.__new__(_ConcreteObjectResolver)
+    resolver.config = _ConfigStub({"DB.SCH": schema_bp})
+    return resolver._is_unmanaged_blueprint("DB.SCH.SOME_OBJECT")
+
+
+def _schema_predicate(schema_bp):
+    """`SchemaResolver._is_unmanaged_blueprint` over one schema."""
+    resolver = SchemaResolver.__new__(SchemaResolver)
+    resolver.blueprints = {"DB.SCH": schema_bp}
+    return resolver._is_unmanaged_blueprint("DB.SCH")
+
+
+def test_is_unmanaged_skips_create_and_compare():
+    # D-218's behaviour, re-keyed. Both predicates fire on the new flag.
+    bp = _schema_bp("SCH", is_unmanaged=True)
+    assert _object_predicate(bp) is True
+    assert _schema_predicate(bp) is True
+
+
+def test_is_sandbox_alone_still_creates_its_declared_children():
+    # The criterion this whole ADR exists for. A schema that only wants the
+    # drop-skip deploys its own declared objects -- before the split this
+    # returned True and the objects were skipped without a word.
+    bp = _schema_bp("SCH", is_sandbox=True)
+    assert _object_predicate(bp) is False
+    assert _schema_predicate(bp) is False
+
+
+def test_the_drop_skip_stays_on_is_sandbox():
+    # _resolve_drop reads schema_bp.is_sandbox directly, not the predicate. Pin
+    # the attribute so a future re-key of the predicates cannot silently take the
+    # drop-skip with them -- that is what puts 616 undeclared OIE objects into a
+    # plain apply's drop path.
+    import inspect
+
+    source = inspect.getsource(AbstractSchemaObjectResolver._resolve_drop)
+    assert "schema_bp.is_sandbox" in source
+    assert "is_unmanaged" not in source
+
+
+def test_both_flags_together_is_the_oie_shape():
+    bp = _schema_bp("SCH", is_sandbox=True, is_unmanaged=True)
+    assert _object_predicate(bp) is True
+    assert bp.is_sandbox is True
+
+
+def test_parsers_accept_the_key_at_both_levels():
+    # additionalProperties is False on both, so an unrecognised key halts the run
+    # at exit(1) before any DDL. That is why the fork patch lands before OIE's.
+    jsonschema.validate({"is_sandbox": True, "is_unmanaged": True}, schema_json_schema)
+    jsonschema.validate({"is_sandbox": True, "is_unmanaged": True}, database_json_schema)
+
+
+def test_an_unknown_flag_is_still_refused():
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate({"is_unmanged": True}, schema_json_schema)
+
+
+def test_schema_inherits_is_unmanaged_from_its_database():
+    # Mirrors the inheritance is_sandbox already had. Without it a database-level
+    # flag would be accepted by the parser and then do nothing.
+    import inspect
+
+    from snowddl.parser import schema as schema_parser
+
+    source = inspect.getsource(schema_parser)
+    assert 'schema_params.get("is_unmanaged", database_params.get("is_unmanaged", False))' in source
