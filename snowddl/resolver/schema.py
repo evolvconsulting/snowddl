@@ -13,14 +13,19 @@ class SchemaResolver(AbstractResolver):
         return self.config.get_blueprints_by_type(SchemaBlueprint)
 
     def _is_unmanaged_blueprint(self, full_name: str) -> bool:
-        # OIE fork (D-218): an is_sandbox schema is recognized-but-not-managed —
-        # skip its CREATE / ALTER / COMMENT. Keys off the blueprint (config), not the
-        # live cache, so it applies whether the schema is visible to the applying role
-        # (GOVERNANCE, hits compare) or invisible (OPS/PUBLIC/OIE_MDM_CI_TEST, which
-        # SnowDDL would otherwise try to CREATE and fail with "already exists, no
-        # privileges"). The schema is still never dropped (it stays in blueprints).
+        # D-218, re-keyed by ADR-005: an is_unmanaged schema is
+        # recognized-but-not-managed — skip its CREATE / ALTER / COMMENT. Keys off the
+        # blueprint (config), not the live cache, so it applies whether the schema is
+        # visible to the applying role (GOVERNANCE, hits compare) or invisible
+        # (OPS/PUBLIC/OIE_MDM_CI_TEST, which SnowDDL would otherwise try to CREATE and
+        # fail with "already exists, no privileges"). The schema is still never dropped
+        # (it stays in blueprints).
+        #
+        # This reads is_unmanaged, not is_sandbox. Until ADR-005 the two meanings shared
+        # one key, so a caller wanting only the drop-skip could not declare objects in
+        # the schema at all -- they parsed, blueprinted, then silently never applied.
         bp = self.blueprints.get(full_name)
-        return bool(bp is not None and getattr(bp, "is_sandbox", False))
+        return bool(bp is not None and getattr(bp, "is_unmanaged", False))
 
     def create_object(self, bp: SchemaBlueprint):
         query = self.engine.query_builder()

@@ -80,7 +80,7 @@ class AbstractResolver(ABC):
             tasks = {}
 
             for full_name in sorted(blueprint_names_batch):
-                # OIE fork (D-218): a blueprint living in an unmanaged (is_sandbox)
+                # OIE fork (D-218, re-keyed by ADR-005): a blueprint living in an unmanaged
                 # schema is recognized but never reconciled — skip create/compare so
                 # the applying role never issues DDL against a schema another tier owns
                 # (e.g. GOVERNANCE/OPS/PUBLIC/OIE_MDM_CI_TEST under OIE_SVC_DEPLOY).

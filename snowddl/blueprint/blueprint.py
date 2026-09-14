@@ -159,6 +159,7 @@ class DatabaseBlueprint(AbstractBlueprint):
     full_name: DatabaseIdent
     permission_model: Optional[str] = None
     is_sandbox: Optional[bool] = None
+    is_unmanaged: Optional[bool] = None
     is_transient: Optional[bool] = None
     retention_time: Optional[int] = None
     external_volume: Optional[Ident] = None
@@ -396,6 +397,7 @@ class SchemaBlueprint(AbstractBlueprint):
     full_name: SchemaIdent
     permission_model: Optional[str] = None
     is_sandbox: Optional[bool] = None
+    is_unmanaged: Optional[bool] = None
     is_transient: Optional[bool] = None
     retention_time: Optional[int] = None
     external_volume: Optional[Ident] = None

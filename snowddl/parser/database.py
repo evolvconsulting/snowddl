@@ -58,6 +58,9 @@ database_json_schema = {
         "is_sandbox": {
             "type": "boolean"
         },
+        "is_unmanaged": {
+            "type": "boolean"
+        },
         "owner_database_read": {
             "type": "array",
             "items": {
@@ -145,6 +148,7 @@ class DatabaseParser(AbstractParser):
                 event_table=build_schema_object_ident(self.env_prefix, database_params.get("event_table"), database_name) if database_params.get("event_table") else None,
                 quoted_identifiers_ignore_case=database_params.get("quoted_identifiers_ignore_case", None),
                 is_sandbox=database_params.get("is_sandbox", False),
+                is_unmanaged=database_params.get("is_unmanaged", False),
                 owner_database_write=[IdentPattern(p) for p in database_params.get("owner_database_write", [])],
                 owner_database_read=[IdentPattern(p) for p in database_params.get("owner_database_read", [])],
                 owner_schema_write=[IdentPattern(p) for p in database_params.get("owner_schema_write", [])],
