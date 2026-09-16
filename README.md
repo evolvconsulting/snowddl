@@ -21,6 +21,34 @@ are pure-unit and need no credentials. Upstream's `Pytest` and `Getting Started`
 live Snowflake account — `test/run_test_full.sh` issues `destroy` then `apply` — so they are
 `workflow_dispatch` only here, and their badges above describe upstream, not this fork.
 
+### `is_unmanaged` (fork-only)
+
+Upstream's `is_sandbox` does one thing: it suppresses drops. Objects that exist in Snowflake but
+not in the config are left alone. Everything the config *does* declare in that schema is still
+created and altered normally.
+
+This fork adds a second, independent key, `is_unmanaged`, for the case `is_sandbox` was being
+stretched to cover — a schema this config recognizes but must never issue DDL against, because
+another tier owns it and the applying role may not even be able to see it. Blueprints in an
+unmanaged schema resolve to `SKIP` instead of create/compare, so a whole-config apply exits cleanly
+rather than erroring on `CREATE`/`ALTER`.
+
+| Key            | Drops undeclared objects | Creates/alters declared objects |
+| -------------- | ------------------------ | ------------------------------- |
+| *(neither)*    | yes                      | yes                             |
+| `is_sandbox`   | no                       | yes                             |
+| `is_unmanaged` | yes                      | no                              |
+| both           | no                       | no                              |
+
+Both keys are valid on `DATABASE` and `SCHEMA` params, and both inherit database → schema. A schema
+that needs both behaviors carries both. `is_sandbox` keeps its upstream meaning exactly, so existing
+configs are unaffected.
+
+```yaml
+# <database>/<schema>/params.yaml
+is_unmanaged: true
+```
+
 ---
 
 SnowDDL is a [declarative-style](https://www.snowflake.com/blog/embracing-agile-software-delivery-and-devops-with-snowflake/) tool for object management automation in [Snowflake](http://snowflake.com).
