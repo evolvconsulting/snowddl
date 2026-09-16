@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.67.5-evolv.4] - 2026-09-16 — document `is_unmanaged`
 
 - **`is_unmanaged` split out of `is_sandbox` (ADR-005).** One key had been carrying two meanings.
   Upstream `is_sandbox` only suppresses drops of undeclared objects; D-218 had extended it to also
