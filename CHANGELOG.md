@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+- **`is_unmanaged` split out of `is_sandbox` (ADR-005).** One key had been carrying two meanings.
+  Upstream `is_sandbox` only suppresses drops of undeclared objects; D-218 had extended it to also
+  mean "never reconcile anything here", which silently stopped creating objects a sandbox schema
+  legitimately declared.
+- `is_sandbox` now keeps the drop-skip alone, with upstream semantics unchanged. The new
+  `is_unmanaged` key carries recognize-but-do-not-manage: blueprints in such a schema resolve to
+  `SKIP` instead of create/compare. A schema needing both behaviors sets both.
+- Valid on `DATABASE` and `SCHEMA` params, inherits database → schema, same as `is_sandbox`.
+- Existing configs are unaffected — no config using `is_sandbox` changes behavior.
+
 ## [0.67.5-oie.12] - 2026-08-20 — apply-revision guard (OIE-819 / D-333)
 
 - An apply now refuses to write an object whose recorded revision is not an **ancestor** of the

@@ -233,11 +233,13 @@ class AbstractResolver(ABC):
         pass
 
     def _is_unmanaged_blueprint(self, full_name: str) -> bool:
-        # OIE fork (D-218): recognize-but-do-not-manage hook. Default: manage
-        # everything (upstream behavior). SchemaResolver / AbstractSchemaObjectResolver
-        # override this to skip objects in schemas flagged `is_sandbox`, so a
-        # whole-config apply run by a role that does not own (and may not even see)
-        # another tier's schema exits cleanly instead of erroring on CREATE/ALTER.
+        # OIE fork (D-218, re-keyed by ADR-005): recognize-but-do-not-manage hook.
+        # Default: manage everything (upstream behavior). SchemaResolver /
+        # AbstractSchemaObjectResolver override this to skip objects in schemas flagged
+        # `is_unmanaged`, so a whole-config apply run by a role that does not own (and may
+        # not even see) another tier's schema exits cleanly instead of erroring on
+        # CREATE/ALTER. Not `is_sandbox` — that flag only suppresses drops of undeclared
+        # objects and still manages what the config does declare.
         return False
 
     @abstractmethod
