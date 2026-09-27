@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.67.5-oie.14] - 2026-09-27 — a column's masking policy changes with FORCE (OIE-1930)
+
+- Moving a column from one masking policy to another is now one statement:
+  `ALTER TABLE ... MODIFY COLUMN c SET MASKING POLICY p USING (...) FORCE`. Before, the new
+  policy's resolver emitted a plain `SET`, which Snowflake refuses while another policy is
+  attached, and the old policy's resolver emitted `UNSET` for the reference it lost. The
+  resolvers run in parallel, so the column was either unmasked between the two statements or
+  the apply failed. OIE-1930 PR-4 moves `MART.SIGNAL.RAW_REF` this way, and a window there
+  exposes removal-request and audience bodies.
+- Two halves, both in `snowddl/resolver/masking_policy.py`:
+  - a new reference on a column that carries a DIFFERENT masking policy gets `FORCE`. The check
+    is one `policy_references(ref_entity_name => ...)` metadata read, made only for a reference
+    about to be set;
+  - a lost reference is not `UNSET` when another masking-policy blueprint claims the same object
+    and first column, because that blueprint's `FORCE` replaces it.
+- Everything else emits oie.13's statements byte for byte: a new reference on an unmasked
+  column, an unchanged reference, a reference nobody claims. `test_oie_masking_policy_force.py`
+  pins both halves, both resolver orders of a swap, and the unchanged cases. Against oie.13 the
+  5 behaviour tests fail and the 6 unchanged-case tests pass.
+- Not changed: `drop_object` still unsets every reference before it drops a policy, and a
+  changed `USING` list on the same policy is still invisible (the reference key is the object
+  and the first column).
+- Cut from `0.67.5-oie.13`, not from `main`: it carries this patch and nothing else.
+
 ## [0.67.5-oie.13] - 2026-09-27 — VECTOR policy signature (OIE-1930)
 
 - A masking policy with a VECTOR argument or return type is no longer dropped and re-created on

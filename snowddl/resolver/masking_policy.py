@@ -172,15 +172,22 @@ class MaskingPolicyResolver(AbstractSchemaObjectResolver):
                 del existing_policy_refs[ref_key]
                 continue
 
-            # Apply new masking policy
+            # Apply new masking policy.
+            # OIE fork (0.67.5-oie.14): if the column already carries a DIFFERENT masking
+            # policy, the column's policy is changing. Replace it in one statement with
+            # FORCE, so no moment exists where the column carries no policy. Upstream
+            # emitted a plain SET, which Snowflake refuses while another policy is set, and
+            # the old policy's resolver UNSET the column on its own schedule: an exposure
+            # window, or a failed apply, depending on which resolver ran first.
             self.engine.execute_unsafe_ddl(
-                "ALTER {object_type:r} {object_name:i} MODIFY COLUMN {first_column:i} SET MASKING POLICY {policy_name:i} USING ({columns:i})",
+                "ALTER {object_type:r} {object_name:i} MODIFY COLUMN {first_column:i} SET MASKING POLICY {policy_name:i} USING ({columns:i}){force:r}",
                 {
                     "object_type": ref.object_type.singular_for_ref,
                     "object_name": ref.object_name,
                     "policy_name": bp.full_name,
                     "first_column": ref.columns[0],
                     "columns": ref.columns,
+                    "force": " FORCE" if self._column_has_other_masking_policy(bp, ref) else "",
                 },
                 condition=self.engine.settings.execute_masking_policy,
             )
@@ -189,6 +196,12 @@ class MaskingPolicyResolver(AbstractSchemaObjectResolver):
 
         # Remove remaining policy references which no longer exist in blueprint
         for existing_ref in existing_policy_refs.values():
+            # OIE fork (0.67.5-oie.14): a column another masking-policy blueprint now
+            # claims is moving to that policy, which replaces this one with FORCE. An
+            # UNSET here would leave it unmasked until that resolver runs, so skip it.
+            if self._is_claimed_by_other_blueprint(bp, existing_ref):
+                continue
+
             self.engine.execute_unsafe_ddl(
                 "ALTER {object_type:r} {database:i}.{schema:i}.{name:i} MODIFY COLUMN {first_column:i} UNSET MASKING POLICY",
                 {
@@ -204,6 +217,41 @@ class MaskingPolicyResolver(AbstractSchemaObjectResolver):
             applied_change = True
 
         return applied_change
+
+    def _column_has_other_masking_policy(self, bp: MaskingPolicyBlueprint, ref) -> bool:
+        # OIE fork (0.67.5-oie.14). Metadata read only, and only for a reference about to
+        # be SET, so an apply with no new reference issues no extra query.
+        cur = self.engine.execute_meta(
+            "SELECT * FROM TABLE(snowflake.information_schema.policy_references(ref_entity_name => {ref_entity_name}, ref_entity_domain => {ref_entity_domain}))",
+            {
+                "ref_entity_name": str(ref.object_name),
+                "ref_entity_domain": ref.object_type.singular_for_ref.lower(),
+            },
+        )
+
+        for r in cur:
+            if r["POLICY_KIND"] != "MASKING_POLICY" or r["REF_COLUMN_NAME"] != str(ref.columns[0]):
+                continue
+
+            if f"{r['POLICY_DB']}.{r['POLICY_SCHEMA']}.{r['POLICY_NAME']}" != str(bp.full_name):
+                return True
+
+        return False
+
+    def _is_claimed_by_other_blueprint(self, bp: MaskingPolicyBlueprint, existing_ref: dict) -> bool:
+        # OIE fork (0.67.5-oie.14). True when another masking-policy blueprint declares a
+        # reference on the same object and first column.
+        existing = f"{existing_ref['database']}.{existing_ref['schema']}.{existing_ref['name']}|{existing_ref['first_column']}"
+
+        for other in self.get_blueprints().values():
+            if str(other.full_name) == str(bp.full_name):
+                continue
+
+            for ref in other.references:
+                if f"{ref.object_name}|{ref.columns[0]}" == existing:
+                    return True
+
+        return False
 
     def _drop_policy_refs(self, policy_name: SchemaObjectIdent):
         existing_policy_refs = self._get_existing_policy_refs(policy_name)
