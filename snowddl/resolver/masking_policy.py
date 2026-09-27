@@ -2,6 +2,7 @@ from json import loads
 
 from snowddl.blueprint import MaskingPolicyBlueprint, ObjectType, Edition, SchemaObjectIdent
 from snowddl.resolver.abc_schema_object_resolver import AbstractSchemaObjectResolver, ResolveResult
+from snowddl.resolver import policy_signature
 
 
 class MaskingPolicyResolver(AbstractSchemaObjectResolver):
@@ -56,8 +57,8 @@ class MaskingPolicyResolver(AbstractSchemaObjectResolver):
 
         # If signature or return type was changed, policy and all references must be dropped and created again
         if (
-            r["signature"] != f"({', '.join([f'{a.name} {a.type.base_type.name}' for a in bp.arguments])})"
-            or r["return_type"] != str(bp.returns)
+            r["signature"] != policy_signature.signature(bp.arguments)
+            or r["return_type"] != policy_signature.return_type(bp.returns)
             or row["options"].get("EXEMPT_OTHER_POLICIES", False) != bp.exempt_other_policies
         ):
             self._drop_policy_refs(bp.full_name)

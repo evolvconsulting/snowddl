@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.67.5-oie.13] - 2026-09-27 — VECTOR policy signature (OIE-1930)
+
+- A masking policy with a VECTOR argument or return type is no longer dropped and re-created on
+  every plan. `DESC MASKING POLICY` reports `(VAL VECTOR(FLOAT, 1536), KINDS ARRAY)` and
+  `VECTOR(FLOAT, 1536)`. The compare expected `(VAL VECTOR, KINDS ARRAY)` and `VECTOR(FLOAT,1536)`.
+  Measured on OIE_UG2_REH, MART.MSK_CORPUS_VECTOR_BY_KINDS: the post-apply plan re-proposed a DROP
+  plus CREATE two minutes after the CREATE.
+- New module `snowddl/resolver/policy_signature.py`, used by both the masking-policy and the
+  row-access-policy compare. VECTOR only: every other type keeps oie.12's exact strings, pinned
+  by `test_oie_policy_signature.py`.
+- Cut from `0.67.5-oie.12`, not from `main`: it carries this patch and nothing else.
+
 ## [0.67.5-oie.12] - 2026-08-20 — apply-revision guard (OIE-819 / D-333)
 
 - An apply now refuses to write an object whose recorded revision is not an **ancestor** of the
