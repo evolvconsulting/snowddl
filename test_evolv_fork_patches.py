@@ -321,3 +321,90 @@ def test_schema_inherits_is_unmanaged_from_its_database():
 
     source = inspect.getsource(schema_parser)
     assert 'schema_params.get("is_unmanaged", database_params.get("is_unmanaged", False))' in source
+
+
+# --- Task predecessor drift ---------------------------------------------------
+#
+# TaskResolver.compare_object re-attached a lost AFTER link with
+# `if bp.after and not row["predecessors"]`. SHOW TASKS returns predecessors as a
+# JSON *string*, so an unlinked task reads "[]" -- truthy -- and the branch never
+# ran. GRANT OWNERSHIP on a root task detaches its children this way; the child has
+# no schedule, never runs, and plan reported NOCHANGE. Measured on catalyst_dev
+# 2026-09-30. The check was also empty-vs-non-empty only, so losing one of two
+# predecessors was invisible even with the string parsed.
+
+from snowddl.blueprint import TaskBlueprint
+from snowddl.formatter import SnowDDLFormatter
+from snowddl.resolver import TaskResolver
+from snowddl.resolver.abc_resolver import ResolveResult
+
+
+class _HashMatches:
+    """Stands in for the CREATE query: body unchanged, so compare reaches the
+    predecessor check instead of returning REPLACE."""
+
+    def compare_short_hash(self, _comment):
+        return True
+
+
+class _RecordingEngine:
+    def __init__(self):
+        self.sql = []
+        self._formatter = SnowDDLFormatter()
+
+    def execute_safe_ddl(self, sql, params=None):
+        self.sql.append(self._formatter.format_sql(sql, params or {}))
+
+
+def _task(after):
+    return TaskBlueprint(
+        full_name=SchemaObjectIdent("", "DB", "SCH", "CHILD"),
+        body="SELECT 1",
+        after=[SchemaObjectIdent("", "DB", "SCH", a) for a in after] if after is not None else None,
+    )
+
+
+def _compare(bp, predecessors):
+    resolver = TaskResolver.__new__(TaskResolver)
+    resolver.engine = _RecordingEngine()
+    resolver._build_create_task = lambda _bp: _HashMatches()
+    result = resolver.compare_object(bp, {"comment": "x", "predecessors": predecessors})
+    return result, resolver.engine.sql
+
+
+def test_task_unlinked_by_ownership_transfer_is_relinked():
+    # The reported bug. "[]" must read as no predecessors.
+    result, sql = _compare(_task(["ROOT"]), "[]")
+    assert result == ResolveResult.ALTER
+    assert sql == ['ALTER TASK "DB"."SCH"."CHILD" ADD AFTER "DB"."SCH"."ROOT"']
+
+
+def test_task_losing_one_of_two_predecessors_is_caught():
+    result, sql = _compare(_task(["ROOT_A", "ROOT_B"]), '[\n  "DB.SCH.ROOT_A"\n]')
+    assert result == ResolveResult.ALTER
+    assert sql == ['ALTER TASK "DB"."SCH"."CHILD" ADD AFTER "DB"."SCH"."ROOT_B"']
+
+
+def test_task_with_an_unexpected_predecessor_has_it_removed():
+    result, sql = _compare(_task(["ROOT"]), '["DB.SCH.ROOT", "DB.SCH.STRAY"]')
+    assert result == ResolveResult.ALTER
+    assert sql == ['ALTER TASK "DB"."SCH"."CHILD" REMOVE AFTER "DB"."SCH"."STRAY"']
+
+
+def test_task_with_matching_predecessors_is_nochange():
+    result, sql = _compare(_task(["ROOT_B", "ROOT_A"]), '["DB.SCH.ROOT_A", "DB.SCH.ROOT_B"]')
+    assert result == ResolveResult.NOCHANGE
+    assert sql == []
+
+
+def test_task_predecessor_match_tolerates_quoted_identifiers():
+    result, sql = _compare(_task(["ROOT"]), '["\\"DB\\".\\"SCH\\".\\"ROOT\\""]')
+    assert result == ResolveResult.NOCHANGE
+    assert sql == []
+
+
+def test_task_without_after_is_left_alone():
+    # Unchanged from upstream: a task declaring no AFTER is not reconciled here.
+    result, sql = _compare(_task(None), '["DB.SCH.SOMETHING"]')
+    assert result == ResolveResult.NOCHANGE
+    assert sql == []

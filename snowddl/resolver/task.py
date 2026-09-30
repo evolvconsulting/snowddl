@@ -1,4 +1,6 @@
-from snowddl.blueprint import TaskBlueprint
+from json import loads as json_loads
+
+from snowddl.blueprint import SchemaObjectIdent, TaskBlueprint
 from snowddl.resolver.abc_schema_object_resolver import AbstractSchemaObjectResolver, ResolveResult, ObjectType
 
 
@@ -63,19 +65,59 @@ class TaskResolver(AbstractSchemaObjectResolver):
 
             return ResolveResult.REPLACE
 
-        # Set predecessor again if it was dropped
-        if bp.after and not row["predecessors"]:
-            self.engine.execute_safe_ddl(
-                "ALTER TASK {full_name:i} ADD AFTER {after:i}",
-                {
-                    "full_name": bp.full_name,
-                    "after": bp.after,
-                },
-            )
+        # Reconcile predecessors that drifted away from config, e.g. GRANT OWNERSHIP on a
+        # root task silently detaches its children. SHOW TASKS returns predecessors as a
+        # JSON string, so an unlinked task reads "[]" -- truthy -- and must be parsed first.
+        # Compare as sets, so losing one of several predecessors is caught too.
+        if bp.after:
+            existing = self._parse_predecessors(row["predecessors"])
+            wanted = {self._normalize_predecessor(str(a)): a for a in bp.after}
 
-            return ResolveResult.ALTER
+            missing = [wanted[name] for name in sorted(wanted.keys() - existing)]
+            extra = [self._predecessor_ident(name) for name in sorted(existing - wanted.keys())]
+
+            if missing or extra:
+                if extra:
+                    self.engine.execute_safe_ddl(
+                        "ALTER TASK {full_name:i} REMOVE AFTER {after:i}",
+                        {
+                            "full_name": bp.full_name,
+                            "after": extra,
+                        },
+                    )
+
+                if missing:
+                    self.engine.execute_safe_ddl(
+                        "ALTER TASK {full_name:i} ADD AFTER {after:i}",
+                        {
+                            "full_name": bp.full_name,
+                            "after": missing,
+                        },
+                    )
+
+                return ResolveResult.ALTER
 
         return ResolveResult.NOCHANGE
+
+    @classmethod
+    def _parse_predecessors(cls, value) -> set:
+        if not value:
+            return set()
+
+        if isinstance(value, str):
+            value = json_loads(value)
+
+        return {cls._normalize_predecessor(v) for v in value}
+
+    @staticmethod
+    def _normalize_predecessor(name: str) -> str:
+        # SnowDDL identifiers are unquoted upper-case; tolerate a quoted "DB"."SCH"."T" form
+        return name.replace('"', "").upper()
+
+    @staticmethod
+    def _predecessor_ident(name: str) -> SchemaObjectIdent:
+        # Normalized name already carries any env prefix inside the database part
+        return SchemaObjectIdent("", *name.split(".", 2))
 
     def drop_object(self, row: dict):
         self.engine.execute_safe_ddl(
