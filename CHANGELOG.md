@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.67.5-evolv.6] - 2026-09-30 — the `oie.*` and `evolv.*` lines rejoin
+
+- `0.67.5-oie.13` and `oie.14` were cut from `oie.12` on a side branch, not from `main`, so from
+  2026-09-27 the fork had two release lines. An `oie.*` pin had neither `is_unmanaged` nor the task
+  predecessor fix; an `evolv.*` pin had neither masking-policy fix. This release merges `oie.14`
+  (which contains `oie.13`) into `main`, so `evolv.6` carries **everything** in both lines.
+- No code conflicts: the two lines touch disjoint files. Only this CHANGELOG conflicted.
+- **For OIE:** moving an `oie.*` pin to `evolv.6` also brings `is_unmanaged` (see `evolv.4`), which
+  changes what `is_sandbox` alone does — it no longer suppresses create/compare. A schema that relied
+  on `is_sandbox` to be skipped (D-218) must add `is_unmanaged: true` in the same change as the bump.
+- The `oie.*` series is closed at `oie.14`. New releases are `evolv.N` only.
+
 ## [0.67.5-evolv.5] - 2026-09-30 — task predecessor drift is reconciled
 
 - **A task whose `AFTER` link is lost now plans as `ALTER`, not `NOCHANGE`.** `SHOW TASKS` returns
@@ -13,6 +25,41 @@
 - Upstream bug, not a fork regression. Name format confirmed against live `SHOW TASKS` output on
   `MDM_DEV`. Still, as before, Snowflake requires the root task to be suspended for the `ALTER`.
 
+## [0.67.5-oie.14] - 2026-09-27 — a column's masking policy changes with FORCE (OIE-1930)
+
+- Moving a column from one masking policy to another is now one statement:
+  `ALTER TABLE ... MODIFY COLUMN c SET MASKING POLICY p USING (...) FORCE`. Before, the new
+  policy's resolver emitted a plain `SET`, which Snowflake refuses while another policy is
+  attached, and the old policy's resolver emitted `UNSET` for the reference it lost. The
+  resolvers run in parallel, so the column was either unmasked between the two statements or
+  the apply failed. OIE-1930 PR-4 moves `MART.SIGNAL.RAW_REF` this way, and a window there
+  exposes removal-request and audience bodies.
+- Two halves, both in `snowddl/resolver/masking_policy.py`:
+  - a new reference on a column that carries a DIFFERENT masking policy gets `FORCE`. The check
+    is one `policy_references(ref_entity_name => ...)` metadata read, made only for a reference
+    about to be set;
+  - a lost reference is not `UNSET` when another masking-policy blueprint claims the same object
+    and first column, because that blueprint's `FORCE` replaces it.
+- Everything else emits oie.13's statements byte for byte: a new reference on an unmasked
+  column, an unchanged reference, a reference nobody claims. `test_oie_masking_policy_force.py`
+  pins both halves, both resolver orders of a swap, and the unchanged cases. Against oie.13 the
+  5 behaviour tests fail and the 6 unchanged-case tests pass.
+- Not changed: `drop_object` still unsets every reference before it drops a policy, and a
+  changed `USING` list on the same policy is still invisible (the reference key is the object
+  and the first column).
+- Cut from `0.67.5-oie.13`, not from `main`: it carries this patch and nothing else.
+
+## [0.67.5-oie.13] - 2026-09-27 — VECTOR policy signature (OIE-1930)
+
+- A masking policy with a VECTOR argument or return type is no longer dropped and re-created on
+  every plan. `DESC MASKING POLICY` reports `(VAL VECTOR(FLOAT, 1536), KINDS ARRAY)` and
+  `VECTOR(FLOAT, 1536)`. The compare expected `(VAL VECTOR, KINDS ARRAY)` and `VECTOR(FLOAT,1536)`.
+  Measured on OIE_UG2_REH, MART.MSK_CORPUS_VECTOR_BY_KINDS: the post-apply plan re-proposed a DROP
+  plus CREATE two minutes after the CREATE.
+- New module `snowddl/resolver/policy_signature.py`, used by both the masking-policy and the
+  row-access-policy compare. VECTOR only: every other type keeps oie.12's exact strings, pinned
+  by `test_oie_policy_signature.py`.
+- Cut from `0.67.5-oie.12`, not from `main`: it carries this patch and nothing else.
 ## [0.67.5-evolv.4] - 2026-09-16 — document `is_unmanaged`
 
 - **`is_unmanaged` split out of `is_sandbox` (ADR-005).** One key had been carrying two meanings.

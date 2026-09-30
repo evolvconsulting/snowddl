@@ -36,4 +36,5 @@ jobs:
         run: pip install -e . pytest jsonschema
 
       - name: Run fork patch tests
-        run: pytest test_evolv_fork_patches.py test_oie_fork_patches.py test_oie_revision_guard.py -q
+        # Every root-level test_*.py is a fork test. A list here silently skipped new files.
+        run: pytest test_*.py -q

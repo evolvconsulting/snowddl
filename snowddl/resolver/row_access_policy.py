@@ -2,6 +2,7 @@ from json import loads
 
 from snowddl.blueprint import RowAccessPolicyBlueprint, ObjectType, Edition, SchemaObjectIdent
 from snowddl.resolver.abc_schema_object_resolver import AbstractSchemaObjectResolver, ResolveResult
+from snowddl.resolver import policy_signature
 
 
 class RowAccessPolicyResolver(AbstractSchemaObjectResolver):
@@ -54,7 +55,7 @@ class RowAccessPolicyResolver(AbstractSchemaObjectResolver):
         r = cur.fetchone()
 
         # If signature was changed, policy and all references must be dropped and created again
-        if r["signature"] != f"({', '.join([f'{a.name} {a.type.base_type.name}' for a in bp.arguments])})":
+        if r["signature"] != policy_signature.signature(bp.arguments):
             self._drop_policy_refs(bp.full_name)
             self._drop_policy(bp.full_name)
 

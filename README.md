@@ -12,9 +12,15 @@
 of upstream `0.67.5` and is consumed by pinning a tag, never a branch.
 
 **Tag scheme.** Releases are tagged `0.67.5-evolv.N`. This supersedes the earlier `0.67.5-oie.N`
-scheme, which stopped at `0.67.5-oie.12` — there is no `oie.13`. The old tags are left in place so
-existing pins keep resolving; move to `evolv.N` at your next bump. The rename is cosmetic: the fork
-is shared across projects, and the old name implied it belonged to one of them.
+scheme. The old tags are left in place so existing pins keep resolving; move to `evolv.N` at your
+next bump. The rename is cosmetic: the fork is shared across projects, and the old name implied it
+belonged to one of them.
+
+`oie.13` and `oie.14` were later cut from `oie.12` on a side branch, not from `main`. From
+2026-09-27 to `evolv.6` the fork therefore had two release lines, each missing the other's fixes.
+`0.67.5-evolv.6` merged them, and carries everything in both. The `oie.*` series is closed at
+`oie.14`; cut every new release from `main` as `evolv.N`. When bumping from any `oie.*` tag, read
+the `is_unmanaged` section below first: it changes what `is_sandbox` alone does.
 
 **CI.** `fork_tests.yml` runs this fork's own regression tests on every push and pull request. They
 are pure-unit and need no credentials. Upstream's `Pytest` and `Getting Started` workflows require a
