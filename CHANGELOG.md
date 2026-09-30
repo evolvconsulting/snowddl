@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.67.5-evolv.5] - 2026-09-30 — task predecessor drift is reconciled
+
+- **A task whose `AFTER` link is lost now plans as `ALTER`, not `NOCHANGE`.** `SHOW TASKS` returns
+  `predecessors` as a JSON string, so an unlinked task reads `"[]"` — truthy — and upstream's
+  re-link check (`if bp.after and not row["predecessors"]`) could never fire. `GRANT OWNERSHIP` on a
+  root task detaches its children this way; the child has no schedule and never runs. Reproduced
+  twice on catalyst_dev by the catalyst-mdm team.
+- Predecessors are now parsed and compared **as a set** against `after`: missing ones get
+  `ADD AFTER`, ones not in config get `REMOVE AFTER`. Losing one of several predecessors is caught
+  too. A task declaring no `after` is left alone, as upstream did.
+- Upstream bug, not a fork regression. Name format confirmed against live `SHOW TASKS` output on
+  `MDM_DEV`. Still, as before, Snowflake requires the root task to be suspended for the `ALTER`.
+
 ## [0.67.5-evolv.4] - 2026-09-16 — document `is_unmanaged`
 
 - **`is_unmanaged` split out of `is_sandbox` (ADR-005).** One key had been carrying two meanings.
