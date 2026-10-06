@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased] — a function declares `depends_on` on the views it reads
+## [0.67.5-evolv.7] - 2026-10-05 — a function declares `depends_on` on the views it reads
 
 - **A function whose body reads a view is created after that view.** A SQL UDF resolves the
   objects its body names at CREATE time, and `FunctionResolver` runs before `ViewResolver`
