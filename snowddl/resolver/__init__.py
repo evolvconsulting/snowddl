@@ -24,7 +24,7 @@ from .external_function import ExternalFunctionResolver
 from .external_table import ExternalTableResolver
 from .file_format import FileFormatResolver
 from .foreign_key import ForeignKeyResolver
-from .function import FunctionResolver
+from .function import FunctionResolver, ViewDependentFunctionResolver
 from .hybrid_table import HybridTableResolver
 from .iceberg_table import IcebergTableResolver
 from .join_policy import JoinPolicyResolver
@@ -106,6 +106,9 @@ default_resolve_sequence = [
     CheckConstraintResolver,
     MaterializedViewResolver,
     ViewResolver,
+    # evolv patch: a function declaring depends_on reads a view, so it is created here,
+    # once every view exists. Skipped outright when no function declares depends_on.
+    ViewDependentFunctionResolver,
     SemanticViewResolver,
     CortexSearchServiceResolver,
     PipeResolver,
@@ -194,6 +197,9 @@ singledb_resolve_sequence = [
     CheckConstraintResolver,
     MaterializedViewResolver,
     ViewResolver,
+    # evolv patch: a function declaring depends_on reads a view, so it is created here,
+    # once every view exists. Skipped outright when no function declares depends_on.
+    ViewDependentFunctionResolver,
     SemanticViewResolver,
     CortexSearchServiceResolver,
     PipeResolver,
