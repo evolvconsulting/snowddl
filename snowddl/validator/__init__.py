@@ -2,6 +2,7 @@ from .abc_validator import AbstractValidator
 from .business_role import BusinessRoleValidator
 from .database import DatabaseValidator
 from .dynamic_table import DynamicTableValidator
+from .function import FunctionValidator
 from .hybrid_table import HybridTableValidator
 from .schema import SchemaValidator
 from .stream import StreamValidator
@@ -20,6 +21,7 @@ default_validate_sequence = [
     HybridTableValidator,
     TaskValidator,
     ViewValidator,
+    FunctionValidator,
     StreamValidator,
     TechnicalRoleValidator,
     BusinessRoleValidator,

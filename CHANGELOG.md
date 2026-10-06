@@ -1,5 +1,26 @@
 # Changelog
 
+## [Unreleased] — a function declares `depends_on` on the views it reads
+
+- **A function whose body reads a view is created after that view.** A SQL UDF resolves the
+  objects its body names at CREATE time, and `FunctionResolver` runs before `ViewResolver`
+  (views can select a UDF). A fresh one-pass apply therefore failed on such a function and
+  only a second apply worked. Measured by the catalyst-mdm team on `MDM_DEV`, 2026-10-05:
+  `F_DECISION_RISK_BAND ... ERROR ... Object 'V_DECISION_RISK' does not exist`.
+- FUNCTION accepts `depends_on: [VIEW_NAME, SCHEMA.VIEW_NAME]`, same syntax as VIEW.
+  `FunctionBlueprint` gains `DependsOnMixin`, so singledb remaps the names like a view's.
+- A new `ViewDependentFunctionResolver` runs right after `ViewResolver` in both resolve
+  sequences and creates or compares only the functions that declare `depends_on`.
+  `FunctionResolver` leaves them out of its batches but keeps them as blueprints, so it never
+  drops one, and the second pass drops nothing.
+- `FunctionValidator` refuses a `depends_on` name that is not a VIEW in config. Only a view
+  edge is honoured; a table edge is already covered by evolv.2's sequence placement.
+- **A config with no function `depends_on` runs exactly what it ran before:** the second pass
+  is skipped before it reads Snowflake (`skip_on_empty_blueprints`), and `FunctionResolver`
+  batches every function at once, as before. `test_evolv_function_depends_on.py`.
+- Not covered: a view that selects a function which itself declares `depends_on`. That view
+  is created before the function. No config needs it today.
+
 ## [0.67.5-evolv.6] - 2026-09-30 — the `oie.*` and `evolv.*` lines rejoin
 
 - `0.67.5-oie.13` and `oie.14` were cut from `oie.12` on a side branch, not from `main`, so from

@@ -118,6 +118,13 @@ function_json_schema = {
                 "type": "string"
             },
         },
+        "depends_on": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "minItems": 1
+        },
         "grants": {
             "type": "object",
             "additionalProperties": {
@@ -172,6 +179,11 @@ class FunctionParser(AbstractParser):
             handler=f.params.get("handler"),
             external_access_integrations=self.get_external_access_integrations(f),
             secrets=self.get_secrets(f),
+            # evolv patch: the views this function's body reads. A function that declares
+            # any is created by ViewDependentFunctionResolver, after ViewResolver.
+            depends_on=set(
+                build_schema_object_ident(self.env_prefix, v, f.database, f.schema) for v in f.params.get("depends_on", [])
+            ),
             grants=f.params.get("grants"),
             comment=f.params.get("comment"),
         )

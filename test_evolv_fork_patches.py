@@ -177,11 +177,21 @@ def test_no_resolver_was_added_dropped_or_duplicated():
 
 
 def test_a_depends_on_declaration_could_not_have_fixed_this():
-    # Records why the sequence moved instead of FunctionBlueprint gaining the mixin:
-    # depends_on is batched per resolver (`allocated_full_names` is local to one
-    # resolver run), so a function -> table edge is invisible to FunctionResolver no
-    # matter how it is declared. Only the cross-resolver sequence can express it.
-    assert not issubclass(FunctionBlueprint, DependsOnMixin)
+    # Records why the sequence moved: depends_on is batched per resolver
+    # (`allocated_full_names` is local to one resolver run), so a function -> table
+    # edge is invisible to FunctionResolver no matter how it is declared. Only the
+    # cross-resolver sequence can express it.
+    #
+    # FunctionBlueprint has since gained DependsOnMixin, for function -> VIEW edges
+    # only (test_evolv_function_depends_on.py). Those are honoured by a second pass,
+    # not by batching, and the validator refuses a table edge -- so this placement is
+    # still the only thing ordering a function after its tables.
+    assert issubclass(FunctionBlueprint, DependsOnMixin)
+    from snowddl.validator.function import FunctionValidator
+    import inspect
+
+    assert "ViewBlueprint" in inspect.getsource(FunctionValidator)
+    assert "TableBlueprint" not in inspect.getsource(FunctionValidator)
 
 
 def test_teardown_is_untouched():
