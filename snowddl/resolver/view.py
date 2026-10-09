@@ -98,15 +98,42 @@ class ViewResolver(AbstractSchemaObjectResolver):
                     f"View [{bp.full_name}] caused describe error [{e.snow_exc.errno}]: {e.snow_exc.raw_msg}"
                 )
 
-                # OIE patch (same visibility class): errno 2003 ("does not exist or
-                # not authorized") is Snowflake's one error for both "the view's
-                # underlying object changed shape" and "this role holds REFERENCES,
-                # never SELECT" -- the two are indistinguishable from here. Text
-                # already matched config byte for byte (the branch above), so under
-                # the same opt-in, accept it rather than replace an object nobody
-                # changed. A role that holds SELECT never hits this errno for a
-                # missing-privilege reason, so its real drift is still caught.
-                if self.engine.settings.ignore_unreadable_view_definitions and e.snow_exc.errno == 2003:
+                # OIE patch (OIE-2314 item 75 follow-up): log the errno at INFO
+                # whenever the flag is on, so a real dispatch shows which code fired
+                # without needing a DEBUG-level log level change. Run 37944740290
+                # left V_SIGNAL_SENSITIVITY_GOLD_COMPARISON REPLACEing under this
+                # branch with no visible errno -- this line is what the next
+                # dispatch will show instead.
+                if self.engine.settings.ignore_unreadable_view_definitions:
+                    self.engine.logger.info(
+                        f"View [{bp.full_name}] describe probe errno [{e.snow_exc.errno}] "
+                        f"under --ignore-unreadable-view-definitions"
+                    )
+
+                # OIE patch (same visibility class): both 2003 and 3001 are Snowflake
+                # errors that mean "this role cannot reach the object", never "the
+                # object itself is broken" -- the same pair this repo's own retrieval
+                # layer already treats as equivalent and verified live against this
+                # account (src/oie/retrieval/errors.py `_UNREACHABLE_ERRNOS`,
+                # 2026-08-14):
+                #   2003 (42S02) "does not exist or not authorized" -- the one error
+                #     Snowflake gives for both a genuinely missing object and one this
+                #     role has no visibility into at all.
+                #   3001 (42501) "SQL access control error: Insufficient privileges to
+                #     operate on <object>" -- the object IS visible (name resolves,
+                #     e.g. via a REFERENCES grant) but the specific operation (SELECT)
+                #     needs a privilege this role does not hold. Observed repeatedly in
+                #     this repo for exactly this shape -- a role that can see an object
+                #     but lacks the one privilege an operation needs (migrations/README.md,
+                #     `archive/handovers/HANDOVER-2026-07-29-OIE-621-wave2-superseded.md`).
+                # Both are privilege-class SQL access control errors, not compilation
+                # errors against the view body (e.g. 904 "invalid identifier" would mean
+                # the view itself is broken, and is NOT in this set). Text already
+                # matched config byte for byte (the branch above), so under the same
+                # opt-in, accept either rather than replace an object nobody changed. A
+                # role that holds SELECT never hits either errno for a missing-privilege
+                # reason, so its real drift is still caught.
+                if self.engine.settings.ignore_unreadable_view_definitions and e.snow_exc.errno in (2003, 3001):
                     if bp.comment != row["comment"]:
                         self.engine.execute_safe_ddl(
                             "COMMENT ON VIEW {full_name:i} IS {comment}",

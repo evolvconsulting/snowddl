@@ -1,5 +1,51 @@
 # Changelog
 
+> Note: this fork's adopted line is tagged `0.67.5-evolv.6.x` (cut from `evolv.6`,
+> not `evolv.7`/`evolv.8` -- see `pyproject.toml`'s `[tool.uv.sources]` comment in
+> `evolvconsulting/organizational-intelligence-engine`). The `[0.67.5-evolv.8]`
+> header below is a pre-existing mismatch in this file, not corrected here.
+
+## [0.67.5-evolv.6.4] - 2026-10-09 — accept errno 3001 (insufficient privileges) alongside 2003 in the describe probe
+
+- `evolv.6.3`'s fix (read `self.engine.settings`, not `self.settings`) let the
+  flag run for real for the first time. Against the live `OBSERVABILITY.V_SIGNAL_GOLD_READING`
+  (SECURE) object the flag now works (run 37944740290), but
+  `V_SIGNAL_SENSITIVITY_GOLD_COMPARISON` (non-secure, `OIE_CI_MIGRATION` holds
+  `REFERENCES` only, no `SELECT`) still REPLACEd. Text matches config byte for byte
+  (confirmed live via `SHOW VIEWS` as a role that can read it), so the describe
+  probe is raising something other than 2003.
+- `ViewResolver.compare_object` now also accepts errno 3001 ("SQL access control
+  error: Insufficient privileges to operate on X") as the same "cannot reach this
+  object, not a broken view" class as 2003 -- the same pair this repo's own
+  `src/oie/retrieval/errors.py` `_UNREACHABLE_ERRNOS` already treats as equivalent,
+  verified live against this account 2026-08-14. 2003 is Snowflake's one error for
+  "does not exist" and "this role cannot see it at all"; 3001 is what Snowflake
+  raises when the object IS visible (e.g. via a REFERENCES grant) but the specific
+  operation needs a privilege the role does not hold -- exactly the REFERENCES-only
+  shape this flag exists for. Neither is a compilation error against the view body
+  (e.g. 904 "invalid identifier" is not accepted).
+- Also logs the describe errno at INFO (not just DEBUG) whenever the flag is on, so
+  a real `snowddl-singledb plan` dispatch shows which errno fired without a
+  separate log-level change.
+- `snowddl/resolver/view.py`. `test_oie_view_references_only_visibility.py` adds
+  3001-under-the-flag coverage (NOCHANGE, ALTER-on-comment-change) alongside the
+  existing 2003 cases, and a control proving 904 still REPLACEs.
+
+## [0.67.5-evolv.6.3] - 2026-10-09 — ViewResolver reads engine.settings, not a nonexistent resolver attribute
+
+- `evolv.6.1`/`.6.2`'s two new branches read `self.settings`, but
+  `AbstractResolver.__init__` only ever sets `self.engine` -- no resolver has a
+  `settings` attribute of its own. Every real dispatch of a REFERENCES-only plan
+  raised `AttributeError: 'ViewResolver' object has no attribute 'settings'` (137
+  views, run 37943536586) -- the flag never ran once outside a unit test.
+  `test_oie_view_references_only_visibility.py`'s own `_resolver()` helper set
+  `resolver.settings` directly on the stub, a path real code never takes, so its
+  11 tests passed while the real dispatch failed.
+- Fixed both reads to `self.engine.settings`, matching every other resolver
+  (`abc_resolver.py`, `table.py`, `stage.py`, ...). Rewrote the test stub to carry
+  `settings` on the engine instead of the resolver.
+- `snowddl/resolver/view.py`, `test_oie_view_references_only_visibility.py`.
+
 ## [0.67.5-evolv.8] - 2026-10-09 — a REFERENCES-only role no longer force-REPLACEs a view it cannot SELECT (OIE-2314 item 75)
 
 - **New opt-in flag `--ignore-unreadable-view-definitions`.** `ViewResolver.compare_object`

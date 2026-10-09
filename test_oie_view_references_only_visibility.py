@@ -63,10 +63,14 @@ class _RecordingEngine:
         # `resolver.settings` directly let the old `self.settings` code pass
         # these tests while raising AttributeError against a real engine.
         self.settings = SnowDDLSettings(ignore_unreadable_view_definitions=ignore_unreadable)
+        self.info_lines = []
 
         class _Logger:
             def debug(self_inner, _msg):
                 pass
+
+            def info(self_inner, msg):
+                self.info_lines.append(msg)
 
         self.logger = _Logger()
 
@@ -199,18 +203,86 @@ def test_errno_2003_is_replaced_without_the_flag():
     assert result == ResolveResult.REPLACE
 
 
-def test_a_different_errno_is_not_swallowed_even_under_the_flag():
-    # Only 2003 is the "can't tell privilege from drift" errno. Anything else
-    # (e.g. a warehouse/network error) must still surface as REPLACE so the apply
-    # has a chance to raise it, same as upstream.
+def test_references_only_errno_3001_is_nochange_under_the_flag():
+    # 3001 ("SQL access control error: Insufficient privileges to operate on X")
+    # is the errno Snowflake raises when the object IS visible (e.g. via a
+    # REFERENCES grant) but the specific operation needs a privilege the role
+    # does not hold -- exactly the REFERENCES-only shape this flag exists for.
+    # Same "cannot reach this object" class as 2003: src/oie/retrieval/errors.py
+    # `_UNREACHABLE_ERRNOS` in the OIE repo already groups the two, verified
+    # live against the OIE account 2026-08-14.
     bp = _view_bp(comment="c")
     row = {"text": "MATCHES", "is_secure": False, "comment": "c"}
-    engine = _RecordingEngine(describe_errno=90105)
+    engine = _RecordingEngine(describe_errno=3001)
+    resolver = _resolver(engine)
+
+    result = resolver.compare_object(bp, row)
+
+    assert result == ResolveResult.NOCHANGE
+    assert engine.sql == []
+
+
+def test_references_only_errno_3001_still_syncs_a_changed_comment():
+    bp = _view_bp(comment="new")
+    row = {"text": "MATCHES", "is_secure": False, "comment": "old"}
+    engine = _RecordingEngine(describe_errno=3001)
+    resolver = _resolver(engine)
+
+    result = resolver.compare_object(bp, row)
+
+    assert result == ResolveResult.ALTER
+    assert len(engine.sql) == 1
+
+
+def test_errno_3001_is_replaced_without_the_flag():
+    bp = _view_bp(comment="c")
+    row = {"text": "MATCHES", "is_secure": False, "comment": "c"}
+    engine = _RecordingEngine(describe_errno=3001, ignore_unreadable=False)
     resolver = _resolver(engine)
 
     result = resolver.compare_object(bp, row)
 
     assert result == ResolveResult.REPLACE
+
+
+def test_a_different_errno_is_not_swallowed_even_under_the_flag():
+    # Only 2003/3001 are the "can't tell privilege from drift" errnos. Anything
+    # else -- 904 "invalid identifier" here, meaning the view body itself is
+    # broken, e.g. an underlying column was dropped -- must still surface as
+    # REPLACE so the apply has a chance to raise it, same as upstream.
+    bp = _view_bp(comment="c")
+    row = {"text": "MATCHES", "is_secure": False, "comment": "c"}
+    engine = _RecordingEngine(describe_errno=904)
+    resolver = _resolver(engine)
+
+    result = resolver.compare_object(bp, row)
+
+    assert result == ResolveResult.REPLACE
+
+
+def test_the_describe_errno_is_logged_at_info_under_the_flag():
+    # OIE-2314 item 75 follow-up: run 37944740290 left a REPLACE with no visible
+    # errno because the original log line was DEBUG-only. The errno is now
+    # logged at INFO whenever the flag is on, so the next real dispatch shows it.
+    bp = _view_bp(comment="c")
+    row = {"text": "MATCHES", "is_secure": False, "comment": "c"}
+    engine = _RecordingEngine(describe_errno=904)
+    resolver = _resolver(engine)
+
+    resolver.compare_object(bp, row)
+
+    assert any("904" in line and "V_X" in line for line in engine.info_lines), engine.info_lines
+
+
+def test_the_describe_errno_is_not_logged_at_info_without_the_flag():
+    bp = _view_bp(comment="c")
+    row = {"text": "MATCHES", "is_secure": False, "comment": "c"}
+    engine = _RecordingEngine(describe_errno=2003, ignore_unreadable=False)
+    resolver = _resolver(engine)
+
+    resolver.compare_object(bp, row)
+
+    assert engine.info_lines == []
 
 
 def test_a_role_with_select_still_catches_real_drift():
