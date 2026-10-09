@@ -226,5 +226,58 @@ def test_flag_defaults_to_false():
     assert SnowDDLSettings().ignore_unreadable_view_definitions is False
 
 
+# `--ignore-unreadable-view-definitions` has to be registered on BOTH entry-point
+# parsers: BaseApp's (used by `snowddl` / `snowddl-apply` etc.) and SingleDbApp's
+# (used by `snowddl-singledb`, the one Layer-1 CI runs). SingleDbApp builds its own
+# ArgumentParser from scratch rather than extending BaseApp's, so registering the
+# flag on one does not register it on the other -- exactly the gap that let
+# `snowddl-singledb ... plan --ignore-unreadable-view-definitions` fail with
+# "unrecognized arguments" in CI (run 37942011035) despite BaseApp's unit tests
+# all passing. Neither `init_arguments_parser` method reads `self`, so the
+# unbound function can be called directly without constructing a full App
+# (which would try to read config / connect to Snowflake).
+def test_base_app_parser_accepts_the_flag():
+    from snowddl.app.base import BaseApp
+
+    parser = BaseApp.init_arguments_parser(None)
+    # The flag belongs to the top-level parser, not the `plan` subparser -- it
+    # must precede the subcommand, since the subparser action consumes the rest.
+    args = vars(parser.parse_args(["--ignore-unreadable-view-definitions", "plan"]))
+
+    assert args["ignore_unreadable_view_definitions"] is True
+
+
+def test_base_app_parser_defaults_the_flag_to_false():
+    from snowddl.app.base import BaseApp
+
+    parser = BaseApp.init_arguments_parser(None)
+    args = vars(parser.parse_args(["plan"]))
+
+    assert args["ignore_unreadable_view_definitions"] is False
+
+
+def test_singledb_app_parser_accepts_the_flag():
+    from snowddl.app.singledb import SingleDbApp
+
+    parser = SingleDbApp.init_arguments_parser(None)
+    # Matches the workflow's actual calling shape (snowddl-conformance.yml):
+    # the flag precedes the `plan`/`apply` subcommand. This is the exact
+    # invocation that failed in CI with "unrecognized arguments" (run
+    # 37942011035), because SingleDbApp built its own ArgumentParser from
+    # scratch and never registered the flag.
+    args = vars(parser.parse_args(["--ignore-unreadable-view-definitions", "plan"]))
+
+    assert args["ignore_unreadable_view_definitions"] is True
+
+
+def test_singledb_app_parser_defaults_the_flag_to_false():
+    from snowddl.app.singledb import SingleDbApp
+
+    parser = SingleDbApp.init_arguments_parser(None)
+    args = vars(parser.parse_args(["plan"]))
+
+    assert args["ignore_unreadable_view_definitions"] is False
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))

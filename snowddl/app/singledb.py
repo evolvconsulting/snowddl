@@ -3,7 +3,7 @@ from os import environ, getcwd
 from pydantic import BaseModel
 from typing import Optional
 
-from snowddl.app.base import BaseApp
+from snowddl.app.base import BaseApp, add_ignore_unreadable_view_definitions_argument
 from snowddl.blueprint import (
     AbstractBlueprint,
     DatabaseBlueprint,
@@ -256,6 +256,8 @@ class SingleDbApp(BaseApp):
             metavar="REASON",
             default=None,
         )
+
+        add_ignore_unreadable_view_definitions_argument(parser)
 
         # Detailed exitcode
         parser.add_argument(

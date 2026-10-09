@@ -23,6 +23,27 @@ from snowddl.validator import default_validate_sequence
 from snowddl.version import __version__
 
 
+def add_ignore_unreadable_view_definitions_argument(parser):
+    # OIE patch (references-only view visibility, D-291/D-293): a role planning
+    # with REFERENCES but never SELECT on a view -- Layer-1 CI conformance is the
+    # case this exists for -- cannot clear ViewResolver.compare_object's own
+    # describe_meta("SELECT * FROM ...") probe, and a SECURE view withholds its
+    # `text` from SHOW VIEWS to any non-owner regardless of privilege. Both read
+    # identically to a real drift (REPLACE), on every run, for an object nobody
+    # touched. Opt-in: a role that holds SELECT everywhere it plans is unaffected,
+    # because neither condition this flag checks for can occur for it.
+    #
+    # Shared between BaseApp and SingleDbApp (which builds its own ArgumentParser
+    # from scratch rather than extending BaseApp's) so the flag is registered once
+    # and both entry points stay in sync.
+    parser.add_argument(
+        "--ignore-unreadable-view-definitions",
+        help="Treat a SECURE view's withheld text, or a SELECT-only describe failure on a readable view, as NOCHANGE instead of REPLACE when the view is visible and its own text (where readable) matches config",
+        default=False,
+        action="store_true",
+    )
+
+
 class BaseApp:
     application_name = "SnowDDL"
     application_version = __version__
@@ -313,20 +334,7 @@ class BaseApp:
             default=None,
         )
 
-        # OIE patch (references-only view visibility, D-291/D-293): a role planning
-        # with REFERENCES but never SELECT on a view -- Layer-1 CI conformance is the
-        # case this exists for -- cannot clear ViewResolver.compare_object's own
-        # describe_meta("SELECT * FROM ...") probe, and a SECURE view withholds its
-        # `text` from SHOW VIEWS to any non-owner regardless of privilege. Both read
-        # identically to a real drift (REPLACE), on every run, for an object nobody
-        # touched. Opt-in: a role that holds SELECT everywhere it plans is unaffected,
-        # because neither condition this flag checks for can occur for it.
-        parser.add_argument(
-            "--ignore-unreadable-view-definitions",
-            help="Treat a SECURE view's withheld text, or a SELECT-only describe failure on a readable view, as NOCHANGE instead of REPLACE when the view is visible and its own text (where readable) matches config",
-            default=False,
-            action="store_true",
-        )
+        add_ignore_unreadable_view_definitions_argument(parser)
 
         # Detailed exitcode
         parser.add_argument(
