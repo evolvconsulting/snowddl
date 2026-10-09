@@ -53,10 +53,16 @@ class _SnowExc:
 
 
 class _RecordingEngine:
-    def __init__(self, describe_errno=None):
+    def __init__(self, describe_errno=None, ignore_unreadable=True):
         self.sql = []
         self.describe_calls = 0
         self._describe_errno = describe_errno
+        # Real attribute path: resolvers read `self.engine.settings`, never
+        # `self.settings` -- there is no such attribute on the resolver itself
+        # (AbstractResolver.__init__ only sets `self.engine`). A stub that set
+        # `resolver.settings` directly let the old `self.settings` code pass
+        # these tests while raising AttributeError against a real engine.
+        self.settings = SnowDDLSettings(ignore_unreadable_view_definitions=ignore_unreadable)
 
         class _Logger:
             def debug(self_inner, _msg):
@@ -83,10 +89,9 @@ def _view_bp(name="V_X", is_secure=False, comment=None):
     )
 
 
-def _resolver(engine, ignore_unreadable=True, query_text="MATCHES"):
+def _resolver(engine, query_text="MATCHES"):
     resolver = ViewResolver.__new__(ViewResolver)
     resolver.engine = engine
-    resolver.settings = SnowDDLSettings(ignore_unreadable_view_definitions=ignore_unreadable)
     resolver._build_create_view = lambda _bp: _MatchingQuery(query_text)
     return resolver
 
@@ -124,8 +129,8 @@ def test_secure_view_withheld_text_is_replaced_without_the_flag():
     # Default (upstream) behaviour is unchanged when the flag is off.
     bp = _view_bp(is_secure=True, comment="c")
     row = {"text": "", "is_secure": True, "comment": "c"}
-    engine = _RecordingEngine()
-    resolver = _resolver(engine, ignore_unreadable=False)
+    engine = _RecordingEngine(ignore_unreadable=False)
+    resolver = _resolver(engine)
 
     result = resolver.compare_object(bp, row)
 
@@ -186,8 +191,8 @@ def test_errno_2003_is_replaced_without_the_flag():
     # that genuinely lacks SELECT, which is why this is opt-in rather than default.
     bp = _view_bp(comment="c")
     row = {"text": "MATCHES", "is_secure": False, "comment": "c"}
-    engine = _RecordingEngine(describe_errno=2003)
-    resolver = _resolver(engine, ignore_unreadable=False)
+    engine = _RecordingEngine(describe_errno=2003, ignore_unreadable=False)
+    resolver = _resolver(engine)
 
     result = resolver.compare_object(bp, row)
 

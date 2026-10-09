@@ -65,7 +65,7 @@ class ViewResolver(AbstractSchemaObjectResolver):
         # body instead of mismatched. Opt-in: a role that owns or can read the view
         # keeps `text` populated, so this branch is never taken for it.
         if (
-            self.settings.ignore_unreadable_view_definitions
+            self.engine.settings.ignore_unreadable_view_definitions
             and bp.is_secure
             and row["is_secure"]
             and not row["text"]
@@ -106,7 +106,7 @@ class ViewResolver(AbstractSchemaObjectResolver):
                 # the same opt-in, accept it rather than replace an object nobody
                 # changed. A role that holds SELECT never hits this errno for a
                 # missing-privilege reason, so its real drift is still caught.
-                if self.settings.ignore_unreadable_view_definitions and e.snow_exc.errno == 2003:
+                if self.engine.settings.ignore_unreadable_view_definitions and e.snow_exc.errno == 2003:
                     if bp.comment != row["comment"]:
                         self.engine.execute_safe_ddl(
                             "COMMENT ON VIEW {full_name:i} IS {comment}",
