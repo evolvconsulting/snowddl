@@ -32,6 +32,7 @@ class SnowDDLSettings(BaseModelWithConfig):
     include_object_types: List[ObjectType] = []
     include_databases: List[DatabaseIdent] = []
     ignore_ownership: bool = False
+    ignore_unreadable_view_definitions: bool = False
     max_workers: int = 32
 
     # Options specific for snowddl-convert

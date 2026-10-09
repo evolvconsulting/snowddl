@@ -56,6 +56,33 @@ class ViewResolver(AbstractSchemaObjectResolver):
     def compare_object(self, bp: ViewBlueprint, row: dict):
         query = self._build_create_view(bp)
 
+        # OIE patch (references-only view visibility, D-291/D-293). A SECURE view's
+        # `text` comes back "" from SHOW VIEWS for any role that is not its owner --
+        # Snowflake withholds it regardless of privilege, so a REFERENCES-only plan
+        # role (Layer-1 CI conformance) can never match it against config and always
+        # falls into the REPLACE path below. The view exists (it is in `row` at all)
+        # and the comment is still visible, so treat it as present with an unknown
+        # body instead of mismatched. Opt-in: a role that owns or can read the view
+        # keeps `text` populated, so this branch is never taken for it.
+        if (
+            self.settings.ignore_unreadable_view_definitions
+            and bp.is_secure
+            and row["is_secure"]
+            and not row["text"]
+        ):
+            if bp.comment != row["comment"]:
+                self.engine.execute_safe_ddl(
+                    "COMMENT ON VIEW {full_name:i} IS {comment}",
+                    {
+                        "full_name": bp.full_name,
+                        "comment": bp.comment if bp.comment else "",
+                    },
+                )
+
+                return ResolveResult.ALTER
+
+            return ResolveResult.NOCHANGE
+
         # If view text is exactly the same
         if row["text"] == str(query):
             try:
@@ -70,6 +97,28 @@ class ViewResolver(AbstractSchemaObjectResolver):
                 self.engine.logger.debug(
                     f"View [{bp.full_name}] caused describe error [{e.snow_exc.errno}]: {e.snow_exc.raw_msg}"
                 )
+
+                # OIE patch (same visibility class): errno 2003 ("does not exist or
+                # not authorized") is Snowflake's one error for both "the view's
+                # underlying object changed shape" and "this role holds REFERENCES,
+                # never SELECT" -- the two are indistinguishable from here. Text
+                # already matched config byte for byte (the branch above), so under
+                # the same opt-in, accept it rather than replace an object nobody
+                # changed. A role that holds SELECT never hits this errno for a
+                # missing-privilege reason, so its real drift is still caught.
+                if self.settings.ignore_unreadable_view_definitions and e.snow_exc.errno == 2003:
+                    if bp.comment != row["comment"]:
+                        self.engine.execute_safe_ddl(
+                            "COMMENT ON VIEW {full_name:i} IS {comment}",
+                            {
+                                "full_name": bp.full_name,
+                                "comment": bp.comment if bp.comment else "",
+                            },
+                        )
+
+                        return ResolveResult.ALTER
+
+                    return ResolveResult.NOCHANGE
             else:
                 # Comments on views are broken and must be applied separately
                 if bp.comment != row["comment"]:

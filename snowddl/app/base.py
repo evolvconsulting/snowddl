@@ -313,6 +313,21 @@ class BaseApp:
             default=None,
         )
 
+        # OIE patch (references-only view visibility, D-291/D-293): a role planning
+        # with REFERENCES but never SELECT on a view -- Layer-1 CI conformance is the
+        # case this exists for -- cannot clear ViewResolver.compare_object's own
+        # describe_meta("SELECT * FROM ...") probe, and a SECURE view withholds its
+        # `text` from SHOW VIEWS to any non-owner regardless of privilege. Both read
+        # identically to a real drift (REPLACE), on every run, for an object nobody
+        # touched. Opt-in: a role that holds SELECT everywhere it plans is unaffected,
+        # because neither condition this flag checks for can occur for it.
+        parser.add_argument(
+            "--ignore-unreadable-view-definitions",
+            help="Treat a SECURE view's withheld text, or a SELECT-only describe failure on a readable view, as NOCHANGE instead of REPLACE when the view is visible and its own text (where readable) matches config",
+            default=False,
+            action="store_true",
+        )
+
         # Detailed exitcode
         parser.add_argument(
             "--detailed-exitcode",
@@ -598,6 +613,9 @@ class BaseApp:
 
         if self.args.get("max_workers"):
             settings.max_workers = int(self.args.get("max_workers"))
+
+        if self.args.get("ignore_unreadable_view_definitions"):
+            settings.ignore_unreadable_view_definitions = True
 
         return settings
 

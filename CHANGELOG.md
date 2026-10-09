@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.67.5-evolv.8] - 2026-10-09 — a REFERENCES-only role no longer force-REPLACEs a view it cannot SELECT (OIE-2314 item 75)
+
+- **New opt-in flag `--ignore-unreadable-view-definitions`.** `ViewResolver.compare_object`
+  had two ways to read "REPLACE" off a role holding REFERENCES but not SELECT, neither of
+  which is drift:
+  - A **SECURE** view's `text` comes back `""` from `SHOW VIEWS` for any role that does not
+    own it, regardless of privilege, so the text-equality check always fails.
+  - A non-secure view's `text` matches config byte for byte, but the `describe_meta("SELECT *
+    FROM ...")` liveness probe raises errno 2003 ("does not exist or not authorized") for a
+    role without SELECT -- the identical errno a genuinely broken underlying object raises.
+- Off by default: byte-identical to `evolv.7` for a role that holds SELECT everywhere it
+  plans. Neither new branch is reachable for it, because `text` is never empty and the
+  probe never raises 2003 on an unchanged view.
+- On, under the flag: a SECURE view whose text is withheld is treated as present with an
+  unknown body (NOCHANGE, or ALTER for a comment-only difference, never REPLACE); a
+  non-secure view that matches text but fails the SELECT-only probe with errno 2003 is
+  treated the same way. Any other errno still REPLACEs, same as upstream -- the flag only
+  closes the specific "cannot tell privilege from drift" case.
+- Measured on OIE: Layer-1 CI conformance plans as `OIE_CI_MIGRATION`, which holds
+  REFERENCES and not SELECT on `OBSERVABILITY.V_SIGNAL_GOLD_READING` (SECURE) and
+  `V_SIGNAL_SENSITIVITY_GOLD_COMPARISON` by a standing SC ruling (D-291/D-293) -- both
+  objects match prod byte for byte, and Layer-1 reported `Suggested 4` on every push to
+  `main` since 2026-10-08 while the full-access Layer-2 plan was green on the same commit.
+- `snowddl/resolver/view.py`, `snowddl/app/base.py` (new CLI flag), `snowddl/settings.py`
+  (new `ignore_unreadable_view_definitions` field). `test_oie_view_references_only_visibility.py`
+  pins both branches, the flag-off fallback to upstream behaviour, a non-2003 errno still
+  REPLACEing, and a role with SELECT still catching real drift.
+
 ## [0.67.5-evolv.6] - 2026-09-30 — the `oie.*` and `evolv.*` lines rejoin
 
 - `0.67.5-oie.13` and `oie.14` were cut from `oie.12` on a side branch, not from `main`, so from
